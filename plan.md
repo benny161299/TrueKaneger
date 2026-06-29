@@ -19,10 +19,10 @@
 
 - [x] **1.1** חיבור ל-MongoDB Atlas Free Tier — הגדרת connection string ובדיקת חיבור
 - [x] **1.2** יצירת סכמת `User` עם כל השדות: email, passwordHash, googleId, role (enum), isBanned, createdAt
-- [ ] **1.3** יצירת סכמת `Contact` עם כל השדות: name, phone, email, reportCount, reportedBy, createdBy, createdAt/updatedAt
-- [ ] **1.4** יצירת סכמת `Report` עם שדות: contactId, reportedBy, reason (enum), suggestedCorrection, freeTextComment, createdAt
-- [ ] **1.5** יצירת סכמת `RevealLog` עם שדות: userId, contactId, timestamp
-- [ ] **1.6** הוספת indexes מתאימים (email unique על User, contactId על RevealLog לביצועי Rate Limit)
+- [x] **1.3** יצירת סכמת `Contact` עם כל השדות: name, phone, email, reportCount, reportedBy, createdBy, createdAt/updatedAt
+- [x] **1.4** יצירת סכמת `Report` עם שדות: contactId, reportedBy, reason (enum), suggestedCorrection, freeTextComment, createdAt
+- [x] **1.5** יצירת סכמת `RevealLog` עם שדות: userId, contactId, timestamp (מוגדר עם TTL למחיקה אוטומטית לאחר 30 יום)
+- [x] **1.6** הוספת indexes מתאימים (email unique על User, contactId על RevealLog לביצועי Rate Limit)
 - [ ] **1.7** כתיבת seed script להכנסת נתוני דמו לפיתוח
 
 ---
