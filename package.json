@@ -1,0 +1,13 @@
+{
+  "name": "true-kaneger-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@biomejs/biome": "2.5.1"
+  }
+}
