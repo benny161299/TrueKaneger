@@ -1,7 +1,8 @@
 import type { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcrypt';
 import { User } from '../models/User.js'; // ⚡ תוקן ליבוא מסולסל תואם למודל שלך
-import type { RegisterInput } from 'shared'; // ודא שבשאר המונורפו השם הוא 'shared' ולא '@truekaneger/shared'
+import type { RegisterInput, LoginInput } from 'shared'; // ודא שבשאר המונורפו השם הוא 'shared' ולא '@truekaneger/shared'
+import { generateAccessToken, generateRefreshToken, setTokenCookies, clearTokenCookies, verifyRefreshToken } from '../utils/jwt.js';
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -38,3 +39,283 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
     next(error); // העברה ל-Error Handler המרכזי
   }
 };
+
+export const login = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email, password } = req.body as LoginInput;
+
+    // 1. חיפוש המשתמש לפי אימייל
+    const user = await User.findOne({ email });
+    if (!user) {
+      res.status(401).json({
+        success: false,
+        message: 'כתובת אימייל או סיסמה שגויים',
+      });
+      return;
+    }
+
+    // 2. השוואת סיסמה (בדיקה אם passwordHash קיים - עשוי להיות חסר אם נרשם דרך Google OAuth)
+    if (!user.passwordHash) {
+      res.status(401).json({
+        success: false,
+        message: 'כתובת אימייל או סיסמה שגויים',
+      });
+      return;
+    }
+
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    if (!isMatch) {
+      res.status(401).json({
+        success: false,
+        message: 'כתובת אימייל או סיסמה שגויים',
+      });
+      return;
+    }
+
+    // 3. בדיקה אם המשתמש חסום במערכת
+    if (user.isBanned) {
+      res.status(403).json({
+        success: false,
+        message: 'גישת משתמש זה נחסמה על ידי מנהל המערכת',
+      });
+      return;
+    }
+
+    // 4. יצירת Access Token ו-Refresh Token
+    const accessToken = generateAccessToken({
+      userId: user._id.toString(),
+      role: user.role,
+    });
+    const refreshToken = generateRefreshToken({
+      userId: user._id.toString(),
+      role: user.role,
+    });
+
+    // 5. הגדרת עוגיות המזהה במענה
+    setTokenCookies(res, accessToken, refreshToken);
+
+    // 6. החזרת תשובה במבנה ה-ApiResponse האחיד
+    res.status(200).json({
+      success: true,
+      message: 'התחברות בוצעה בהצלחה',
+      data: {
+        user: {
+          id: user._id,
+          email: user.email,
+          role: user.role,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const logout = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // מחיקת העוגיות השמורות בדפדפן
+    clearTokenCookies(res);
+
+    res.status(200).json({
+      success: true,
+      message: 'התנתקות בוצעה בהצלחה',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const refresh = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // 1. קריאת ה-refreshToken מתוך עוגיות הבקשה
+    const refreshToken = req.cookies.refreshToken;
+    if (!refreshToken) {
+      res.status(401).json({
+        success: false,
+        message: 'גישה נדחתה. לא נמצא אסימון רענון',
+      });
+      return;
+    }
+
+    // 2. אימות אסימון הרענון
+    const decoded = verifyRefreshToken(refreshToken);
+    if (!decoded) {
+      res.status(401).json({
+        success: false,
+        message: 'אסימון הרענון אינו תקף או שפג תוקפו',
+      });
+      return;
+    }
+
+    // 3. חיפוש המשתמש במסד הנתונים
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      res.status(401).json({
+        success: false,
+        message: 'משתמש לא נמצא במערכת',
+      });
+      return;
+    }
+
+    // 4. בדיקה אם המשתמש חסום במערכת
+    if (user.isBanned) {
+      res.status(403).json({
+        success: false,
+        message: 'גישת משתמש זה נחסמה על ידי מנהל המערכת',
+      });
+      return;
+    }
+
+    // 5. הנפקת אסימונים חדשים
+    const newAccessToken = generateAccessToken({
+      userId: user._id.toString(),
+      role: user.role,
+    });
+    const newRefreshToken = generateRefreshToken({
+      userId: user._id.toString(),
+      role: user.role,
+    });
+
+    // 6. עדכון עוגיות המזהה במענה
+    setTokenCookies(res, newAccessToken, newRefreshToken);
+
+    // 7. החזרת תשובה במבנה ה-ApiResponse האחיד
+    res.status(200).json({
+      success: true,
+      message: 'אסימון הגישה חודש בהצלחה',
+    });
+  } catch (error) {
+    res.status(401).json({
+      success: false,
+      message: 'אסימון הרענון אינו תקף או שפג תוקפו',
+    });
+  }
+};
+
+export const googleAuthRedirect = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const rootUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
+    const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
+    
+    const options = {
+      redirect_uri: redirectUri,
+      client_id: process.env.GOOGLE_CLIENT_ID || '',
+      access_type: 'offline',
+      response_type: 'code',
+      prompt: 'consent',
+      scope: [
+        'https://www.googleapis.com/auth/userinfo.profile',
+        'https://www.googleapis.com/auth/userinfo.email',
+      ].join(' '),
+    };
+
+    const qs = new URLSearchParams(options).toString();
+    res.redirect(`${rootUrl}?${qs}`);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const googleAuthCallback = async (req: Request, res: Response, next: NextFunction) => {
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  try {
+    // 1. קבלת קוד האימות מגוגל
+    const { code } = req.query;
+    if (!code) {
+      res.redirect(`${clientUrl}/login?error=no_code`);
+      return;
+    }
+
+    // 2. החלפת הקוד ב-Access Token של Google
+    const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        code: code as string,
+        client_id: process.env.GOOGLE_CLIENT_ID || '',
+        client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      }).toString(),
+    });
+
+    if (!tokenResponse.ok) {
+      const errText = await tokenResponse.text();
+      console.error('Google Token Exchange Error:', errText);
+      res.redirect(`${clientUrl}/login?error=google_auth_failed`);
+      return;
+    }
+
+    const tokenData = (await tokenResponse.json()) as { access_token: string };
+
+    // 3. שליפת פרטי המשתמש מגוגל
+    const userinfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: {
+        Authorization: `Bearer ${tokenData.access_token}`,
+      },
+    });
+
+    if (!userinfoResponse.ok) {
+      const errText = await userinfoResponse.text();
+      console.error('Google Userinfo Fetch Error:', errText);
+      res.redirect(`${clientUrl}/login?error=google_userinfo_failed`);
+      return;
+    }
+
+    const userData = (await userinfoResponse.json()) as { id: string; email: string };
+    const { id: googleId, email } = userData;
+
+    // 4. חיפוש או יצירת המשתמש במסד הנתונים
+    let user = await User.findOne({ googleId });
+    
+    if (!user) {
+      // אם לא נמצא מזהה גוגל, ננסה לחפש לפי אימייל (אם נרשם בעבר ידנית)
+      user = await User.findOne({ email });
+      if (user) {
+        user.googleId = googleId;
+        await user.save();
+      } else {
+        // יצירת משתמש חדש
+        user = new User({
+          email,
+          googleId,
+          role: 'user',
+        });
+        await user.save();
+      }
+    }
+
+    // 5. בדיקה אם המשתמש חסום במערכת
+    if (user.isBanned) {
+      res.redirect(`${clientUrl}/login?error=banned`);
+      return;
+    }
+
+    // 6. הנפקת אסימוני JWT של המערכת שלנו
+    const accessToken = generateAccessToken({
+      userId: user._id.toString(),
+      role: user.role,
+    });
+    const refreshToken = generateRefreshToken({
+      userId: user._id.toString(),
+      role: user.role,
+    });
+
+    // 7. הגדרת עוגיות המזהה במענה
+    setTokenCookies(res, accessToken, refreshToken);
+
+    // 8. הפניה חזרה לפרונטנד
+    res.redirect(clientUrl);
+  } catch (error) {
+    console.error('OAuth error:', error);
+    res.redirect(`${clientUrl}/login?error=server_error`);
+  }
+};
+
+
+
+
+

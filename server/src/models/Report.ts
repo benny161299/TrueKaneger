@@ -5,6 +5,7 @@ export enum ReportReason {
   DOES_NOT_EXIST = 'DOES_NOT_EXIST',
   WRONG_NAME = 'WRONG_NAME',
   WRONG_EMAIL = 'WRONG_EMAIL',
+  OTHER = 'OTHER',
 }
 
 export interface IReport extends Document {

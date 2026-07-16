@@ -1,13 +1,19 @@
-import dotenv from 'dotenv';
+import './config/env.js';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser'; // ⚡ תוספת חובה לקריאת עוגיות בשלבי ה-JWT הבאים
 import { connectDB } from './config/db.js';
 import authRoutes from './routes/auth.routes.js';
+import contactRoutes from './routes/contact.routes.js';
+import adminRoutes from './routes/admin.routes.js';
 
-// טעינת משתני סביבה
-dotenv.config();
+
+// הפעלת מסד נתונים מדמה במידה והוגדר משתנה סביבה (לצרכי בדיקות בסביבה מנותקת)
+if (process.env.MOCK_DB === 'true') {
+  const { setupMockDb } = await import('./utils/mockDb.js');
+  setupMockDb();
+}
 
 // חיבור למסד הנתונים MongoDB Atlas
 await connectDB();
@@ -20,8 +26,35 @@ app.use(cors());
 app.use(express.json());
 app.use(cookieParser()); // ⚡ מפעיל את היכולת לקרוא cookies מהדפדפן
 
+import mongoose from 'mongoose';
+import { RevealLog } from './models/RevealLog.js';
+
 // חיבור הראוטים של ה-Authentication
 app.use('/api/auth', authRoutes);
+app.use('/api/contacts', contactRoutes);
+app.use('/api/admin', adminRoutes);
+
+// נתיב בדיקות מיוחד לזריעת לוגים של חשיפה (מופעל רק במצב MOCK_DB)
+if (process.env.MOCK_DB === 'true') {
+  app.post('/api/test/seed-reveal-logs', async (req, res) => {
+    try {
+      const { userId, count, ageMs } = req.body;
+      const logs = [];
+      for (let i = 0; i < count; i++) {
+        const log = new RevealLog({
+          userId: new mongoose.Types.ObjectId(userId),
+          contactId: new mongoose.Types.ObjectId(),
+          timestamp: new Date(Date.now() - (ageMs || 0)),
+        });
+        await log.save();
+        logs.push(log);
+      }
+      res.json({ success: true, seeded: logs.length });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+}
 
 // Error Handling Middleware המרכזי של האפליקציה
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
