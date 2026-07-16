@@ -1,0 +1,8 @@
+/* Custom global resets, layout is powered by MUI & Emotion RTL */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #f7fafc;
+  font-family: "Work Sans", sans-serif;
+  direction: rtl;
+}
