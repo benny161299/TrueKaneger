@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { registerSchema, loginSchema } from 'shared';
 import { validateRequest } from '../middlewares/validateRequest.js';
-import { register, login, logout, refresh, googleAuthRedirect, googleAuthCallback } from '../controllers/auth.controller.js';
+import { register, login, logout, refresh, googleAuthRedirect, googleAuthCallback, getMe } from '../controllers/auth.controller.js';
+import { requireAuth } from '../middlewares/auth.js';
 
 const router = Router();
 
@@ -12,5 +13,6 @@ router.post('/logout', logout);
 router.post('/refresh', refresh);
 router.get('/google', googleAuthRedirect);
 router.get('/google/callback', googleAuthCallback);
+router.get('/me', requireAuth, getMe);
 
 export default router;

@@ -19,12 +19,46 @@ if (process.env.MOCK_DB === 'true') {
 await connectDB();
 
 const app = express();
+app.disable('x-powered-by');
 
 // Middlewares מרכזיים להגנה ופענוח בקשות
 app.use(helmet());
-app.use(cors());
+
+// הגדרת CORS מאובטחת לדומיין ספציפי בלבד (ללא wildcard *) עם תמיכה ב-credentials (עוגיות)
+const allowedOrigins = process.env.CLIENT_URL
+  ? process.env.CLIENT_URL.split(',').map((url) => url.trim())
+  : ['http://localhost:5173'];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // בקשות ללא כותרת Origin (כמו כלי בדיקה פנימיים, Curl או Server-to-Server)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
+import { mongoSanitizeMiddleware } from './utils/sanitize.js';
+
 app.use(express.json());
 app.use(cookieParser()); // ⚡ מפעיל את היכולת לקרוא cookies מהדפדפן
+app.use(mongoSanitizeMiddleware); // 🛡️ חיטוי NoSQL Injection גלובלי לכל סוגי הבקשות
+
+// 💓 Ping & Health check endpoints for keep-alive monitoring (UptimeRobot, cron-job.org, Render)
+app.get(['/health', '/api/health', '/ping', '/api/ping'], (_req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: Math.floor(process.uptime()),
+    service: 'true-kaneger-api'
+  });
+});
 
 import mongoose from 'mongoose';
 import { RevealLog } from './models/RevealLog.js';

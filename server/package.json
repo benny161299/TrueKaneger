@@ -12,8 +12,12 @@
     "test:auth": "tsx src/scripts/test-auth.ts",
     "test:contacts": "tsx src/scripts/test-contacts.ts",
     "test:rate-limit": "tsx src/scripts/test-rate-limit.ts",
+    "test:unit:rate-limit": "tsx src/scripts/test-unit-rate-limit.ts",
     "test:reports": "tsx src/scripts/test-reports.ts",
-    "test:admin": "tsx src/scripts/test-admin.ts"
+    "test:admin": "tsx src/scripts/test-admin.ts",
+    "test:unit:zod": "tsx src/scripts/test-unit-zod.ts",
+    "test:anti-spam": "tsx src/scripts/test-contact-creation-protection.ts",
+    "test:db": "tsx src/scripts/test-db-connection.ts"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

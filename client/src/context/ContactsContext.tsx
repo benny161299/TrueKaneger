@@ -17,7 +17,15 @@ interface ContactsContextType {
   addContact: (name: string, phone: string, email?: string) => Promise<void>;
   revealContact: (
     id: string,
-  ) => Promise<{ phone: string; email: string | null }>;
+  ) => Promise<{
+    phone: string;
+    email: string | null;
+    adminMeta?: {
+      createdByEmail: string;
+      createdById: string;
+      createdAt?: string;
+    };
+  }>;
   reportContact: (
     id: string,
     reason: string,
@@ -80,6 +88,18 @@ export function ContactsProvider({ children }: { children: React.ReactNode }) {
       }
       throw new Error(response.data?.message || "חשיפת איש קשר נכשלה");
     } catch (err: any) {
+      if (err.response?.status === 429) {
+        const waitTime = err.response?.data?.waitTimeMinutes;
+        const msg =
+          err.response?.data?.message ||
+          (waitTime
+            ? `הגעת למגבלת הגילויים. נסה שוב בעוד ${waitTime} דקות`
+            : "הגעת למגבלת הגילויים. אנא נסה שוב מאוחר יותר");
+        const rateLimitErr: any = new Error(msg);
+        rateLimitErr.status = 429;
+        rateLimitErr.waitTimeMinutes = waitTime;
+        throw rateLimitErr;
+      }
       const msg =
         err.response?.data?.message || err.message || "חשיפת איש קשר נכשלה";
       throw new Error(msg);
@@ -99,10 +119,12 @@ export function ContactsProvider({ children }: { children: React.ReactNode }) {
         freeTextComment,
       });
       if (response.data?.success) {
-        // Optimistically increment reportCount for the contact
+        // Optimistically increment reportCount and mark hasReported: true
         setContacts((prev) =>
           prev.map((c) =>
-            c._id === id ? { ...c, reportCount: c.reportCount + 1 } : c,
+            c._id === id
+              ? { ...c, reportCount: c.reportCount + 1, hasReported: true }
+              : c,
           ),
         );
       } else {

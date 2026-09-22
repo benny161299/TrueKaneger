@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:rtl": "playwright test e2e/rtl-accessibility.spec.ts"
   },
   "dependencies": {
     "@emotion/cache": "^11.11.0",
@@ -24,6 +26,7 @@
     "stylis-plugin-rtl": "^2.1.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^24.13.2",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

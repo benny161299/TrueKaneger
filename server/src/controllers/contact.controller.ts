@@ -4,16 +4,72 @@ import { RevealLog } from '../models/RevealLog.js';
 import { Report } from '../models/Report.js';
 import type { CreateContactInput, CreateReportInput } from 'shared';
 import type { AuthenticatedRequest } from '../middlewares/auth.js';
+import { escapeRegex } from '../utils/sanitize.js';
 
 export const getContacts = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // שליפת רשימת אנשי קשר המכילה רק מזהים ושמות (ללא טלפון ומייל לשמירה על פרטיות)
-    const contacts = await Contact.find({}, 'name reportCount');
+    const { search } = req.query as { search?: string };
+    const query: Record<string, any> = {};
+
+    if (search && typeof search === 'string' && search.trim()) {
+      // חיטוי מוחלט ובריחה (escape) של כל תווים מיוחדים למניעת NoSQL Injection ו-ReDoS
+      const safeSearch = escapeRegex(search.trim());
+      query.name = { $regex: safeSearch, $options: 'i' };
+    }
+
+    // שליפת רשימת אנשי קשר המכילה רק מזהים, שמות ודיווחים
+    const contacts = await Contact.find(query, 'name reportCount reportedBy');
+    const userId = (req as AuthenticatedRequest).user?.userId;
+
+    // שליפת פירוט סיבות הדיווחים עבור אנשי קשר שיש להם דיווחים
+    const contactIdsWithReports = contacts
+      .filter((c) => c.reportCount > 0)
+      .map((c) => c._id);
+
+    const reportBreakdowns: Record<string, Record<string, number>> = {};
+    if (contactIdsWithReports.length > 0) {
+      const reports = await Report.aggregate([
+        {
+          $match: {
+            contactId: { $in: contactIdsWithReports },
+          },
+        },
+        {
+          $group: {
+            _id: { contactId: '$contactId', reason: '$reason' },
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+
+      for (const item of reports) {
+        const cId = item._id.contactId.toString();
+        const reason = item._id.reason;
+        if (!reportBreakdowns[cId]) {
+          reportBreakdowns[cId] = {};
+        }
+        reportBreakdowns[cId][reason] = item.count;
+      }
+    }
+
+    const data = contacts.map((c) => {
+      const cObj = typeof c.toObject === 'function' ? c.toObject() : { ...c };
+      const hasReported = userId && cObj.reportedBy
+        ? cObj.reportedBy.some((rId: any) => rId.toString() === userId.toString())
+        : false;
+      return {
+        _id: cObj._id,
+        name: cObj.name,
+        reportCount: cObj.reportCount || 0,
+        hasReported: !!hasReported,
+        reportBreakdown: reportBreakdowns[c._id.toString()] || {},
+      };
+    });
 
     res.status(200).json({
       success: true,
       message: 'רשימת אנשי הקשר נשלפה בהצלחה',
-      data: contacts,
+      data,
     });
   } catch (error) {
     next(error);
@@ -99,7 +155,7 @@ export const revealContact = async (req: AuthenticatedRequest, res: Response, ne
       return;
     }
 
-    const contact = await Contact.findById(id);
+    const contact = await Contact.findById(id).populate('createdBy', 'email');
     if (!contact) {
       res.status(404).json({
         success: false,
@@ -115,12 +171,27 @@ export const revealContact = async (req: AuthenticatedRequest, res: Response, ne
     });
     await log.save();
 
+    const hasReported = req.user && contact.reportedBy
+      ? contact.reportedBy.some((rId: any) => rId.toString() === req.user!.userId.toString())
+      : false;
+
+    // מטא-דאטה מנהל: נחשף אך ורק למנהלים (admin)
+    const adminMeta = req.user.role === 'admin'
+      ? {
+          createdByEmail: (contact.createdBy as any)?.email || 'לא צוין',
+          createdById: (contact.createdBy as any)?._id || contact.createdBy,
+          createdAt: (contact as any).createdAt,
+        }
+      : undefined;
+
     res.status(200).json({
       success: true,
       message: 'פרטי איש הקשר נחשפו בהצלחה',
       data: {
         phone: contact.phone,
         email: contact.email || null,
+        hasReported: !!hasReported,
+        adminMeta,
       },
     });
   } catch (error) {

@@ -7,9 +7,16 @@ import type { UpdateContactNameInput, UpdateContactPhoneInput, UpdateContactEmai
 
 export const getReports = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // שליפת כל הדיווחים במערכת עם קישור לפרטי איש הקשר והמשתמש המדווח
+    // שליפת כל הדיווחים במערכת עם קישור לפרטי איש הקשר (כולל היוצר) והמשתמש המדווח
     const reports = await Report.find()
-      .populate('contactId', 'name phone email')
+      .populate({
+        path: 'contactId',
+        select: 'name phone email createdBy createdAt',
+        populate: {
+          path: 'createdBy',
+          select: 'email',
+        },
+      })
       .populate('reportedBy', 'email');
 
     res.status(200).json({
@@ -94,6 +101,19 @@ export const toggleUserBan = async (req: AuthenticatedRequest, res: Response, ne
         role: user.role,
         isBanned: user.isBanned,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getUsers = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const users = await User.find({}, 'email role isBanned createdAt updatedAt');
+    res.status(200).json({
+      success: true,
+      message: 'רשימת המשתמשים נשלפה בהצלחה',
+      data: users,
     });
   } catch (error) {
     next(error);

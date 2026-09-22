@@ -1,4 +1,12 @@
 import mongoose from 'mongoose';
+import dns from 'dns';
+
+// Ensure reliable SRV DNS resolution (prevents ECONNREFUSED on local Windows/ISP routers)
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch {
+  // Ignore in environments where custom DNS servers cannot be set
+}
 
 export const connectDB = async (): Promise<void> => {
   const mongoUri = process.env.MONGO_URI;

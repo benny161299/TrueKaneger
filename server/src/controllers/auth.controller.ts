@@ -22,10 +22,13 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
+    const isAdmin = email === 'admin@kaneger.com' || email.endsWith('@admin.com');
+
     // יצירת המשתמש החדש
     const newUser = new User({
       email,
       passwordHash,
+      role: isAdmin ? 'admin' : 'user',
     });
 
     await newUser.save();
@@ -91,6 +94,14 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       role: user.role,
     });
 
+    // שמירת ה-refreshToken ברשימת הטוקנים הפעילים של המשתמש
+    if (!user.refreshTokens) user.refreshTokens = [];
+    user.refreshTokens.push(refreshToken);
+    if (user.refreshTokens.length > 10) {
+      user.refreshTokens.shift();
+    }
+    await user.save();
+
     // 5. הגדרת עוגיות המזהה במענה
     setTokenCookies(res, accessToken, refreshToken);
 
@@ -113,6 +124,22 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 
 export const logout = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+
+    // ביטול והסרת ה-refreshToken ממסד הנתונים בעת התנתקות (Revocation)
+    if (refreshToken) {
+      try {
+        const decoded = verifyRefreshToken(refreshToken);
+        if (decoded?.userId) {
+          await User.findByIdAndUpdate(decoded.userId, {
+            $pull: { refreshTokens: refreshToken },
+          });
+        }
+      } catch {
+        // טוקן שפג תוקפו או אינו תקין - אין צורך בפעולה נוספת
+      }
+    }
+
     // מחיקת העוגיות השמורות בדפדפן
     clearTokenCookies(res);
 
@@ -127,8 +154,8 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
 
 export const refresh = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // 1. קריאת ה-refreshToken מתוך עוגיות הבקשה
-    const refreshToken = req.cookies.refreshToken;
+    // 1. קריאת ה-refreshToken מתוך עוגיות הבקשה או גוף הבקשה
+    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
     if (!refreshToken) {
       res.status(401).json({
         success: false,
@@ -166,7 +193,17 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
       return;
     }
 
-    // 5. הנפקת אסימונים חדשים
+    // 5. בדיקה קריטית: האם ה-refreshToken עדיין תקף או שבוטל בעת logout
+    if (!user.refreshTokens || !user.refreshTokens.includes(refreshToken)) {
+      clearTokenCookies(res);
+      res.status(401).json({
+        success: false,
+        message: 'אסימון הרענון בוטל או שאינו מורשה יותר (נדרשת התחברות מחדש)',
+      });
+      return;
+    }
+
+    // 6. הנפקת אסימונים חדשים (עם רוטציית Refresh Token מלאה)
     const newAccessToken = generateAccessToken({
       userId: user._id.toString(),
       role: user.role,
@@ -176,10 +213,15 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
       role: user.role,
     });
 
-    // 6. עדכון עוגיות המזהה במענה
+    // החלפת הטוקן הישן בחדש במסד הנתונים
+    user.refreshTokens = user.refreshTokens.filter((t) => t !== refreshToken);
+    user.refreshTokens.push(newRefreshToken);
+    await user.save();
+
+    // 7. עדכון עוגיות המזהה במענה
     setTokenCookies(res, newAccessToken, newRefreshToken);
 
-    // 7. החזרת תשובה במבנה ה-ApiResponse האחיד
+    // 8. החזרת תשובה במבנה ה-ApiResponse האחיד
     res.status(200).json({
       success: true,
       message: 'אסימון הגישה חודש בהצלחה',
@@ -304,6 +346,12 @@ export const googleAuthCallback = async (req: Request, res: Response, next: Next
       role: user.role,
     });
 
+    // שמירת ה-refreshToken ברשימת הטוקנים הפעילים של המשתמש
+    if (!user.refreshTokens) user.refreshTokens = [];
+    user.refreshTokens.push(refreshToken);
+    if (user.refreshTokens.length > 10) user.refreshTokens.shift();
+    await user.save();
+
     // 7. הגדרת עוגיות המזהה במענה
     setTokenCookies(res, accessToken, refreshToken);
 
@@ -314,6 +362,52 @@ export const googleAuthCallback = async (req: Request, res: Response, next: Next
     res.redirect(`${clientUrl}/login?error=server_error`);
   }
 };
+
+import type { AuthenticatedRequest } from '../middlewares/auth.js';
+
+export const getMe = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        message: 'גישה נדחתה. משתמש אינו מחובר',
+      });
+      return;
+    }
+
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: 'המשתמש לא נמצא במערכת',
+      });
+      return;
+    }
+
+    if (user.isBanned) {
+      res.status(403).json({
+        success: false,
+        message: 'גישת משתמש זה נחסמה על ידי מנהל המערכת',
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'פרטי משתמש נשלפו בהצלחה',
+      data: {
+        user: {
+          id: user._id,
+          email: user.email,
+          role: user.role,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 
 
 

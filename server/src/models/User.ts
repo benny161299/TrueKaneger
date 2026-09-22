@@ -6,6 +6,7 @@ export interface IUser extends Document {
   googleId?: string;
   role: 'user' | 'admin';
   isBanned: boolean;
+  refreshTokens?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,6 +36,10 @@ const UserSchema: Schema = new Schema(
     isBanned: {
       type: Boolean,
       default: false,
+    },
+    refreshTokens: {
+      type: [String],
+      default: [],
     },
   },
   {
