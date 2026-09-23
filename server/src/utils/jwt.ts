@@ -52,15 +52,14 @@ export const setTokenCookies = (res: Response, accessToken: string, refreshToken
   res.cookie('accessToken', accessToken, {
     httpOnly: true,
     secure: isProduction,
-    sameSite: 'strict',
+    sameSite: isProduction ? 'none' : 'lax',
     maxAge: 60 * 60 * 1000, // שעה אחת במילי-שניות
   });
 
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
     secure: isProduction,
-    sameSite: 'strict',
-    // ⬇️ שונה ל-30 יום במילי-שניות (30 יום * 24 שעות * 60 דקות * 60 שניות * 1000 מילי-שניות)
+    sameSite: isProduction ? 'none' : 'lax',
     maxAge: 30 * 24 * 60 * 60 * 1000, 
   });
 };
@@ -69,11 +68,11 @@ export const clearTokenCookies = (res: Response) => {
   res.clearCookie('accessToken', {
     httpOnly: true,
     secure: isProduction,
-    sameSite: 'strict',
+    sameSite: isProduction ? 'none' : 'lax',
   });
   res.clearCookie('refreshToken', {
     httpOnly: true,
     secure: isProduction,
-    sameSite: 'strict',
+    sameSite: isProduction ? 'none' : 'lax',
   });
 };

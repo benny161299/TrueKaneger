@@ -20,24 +20,31 @@ await connectDB();
 
 const app = express();
 app.disable('x-powered-by');
+app.set('trust proxy', 1); // חובה עבור Render ופלטפורמות ענן לקבלת פרוטוקול HTTPS אמין ועוגיות מאובטחות
 
 // Middlewares מרכזיים להגנה ופענוח בקשות
 app.use(helmet());
 
-// הגדרת CORS מאובטחת לדומיין ספציפי בלבד (ללא wildcard *) עם תמיכה ב-credentials (עוגיות)
+// הגדרת CORS מאובטחת לדומיינים מורשים ולכל דומייני Vercel של הפרויקט
 const allowedOrigins = process.env.CLIENT_URL
   ? process.env.CLIENT_URL.split(',').map((url: string) => url.trim())
   : ['http://localhost:5173'];
+
+const isOriginAllowed = (origin: string): boolean => {
+  if (allowedOrigins.includes(origin)) return true;
+  if (/^https:\/\/.*\.vercel\.app$/.test(origin)) return true;
+  if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return true;
+  return false;
+};
 
 app.use(
   cors({
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       // בקשות ללא כותרת Origin (כמו כלי בדיקה פנימיים, Curl או Server-to-Server)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) {
+      if (!origin || isOriginAllowed(origin)) {
         return callback(null, true);
       }
-      return callback(null, false);
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
