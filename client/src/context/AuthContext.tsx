@@ -32,6 +32,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearAuth = useCallback(() => {
     setUser(null);
     localStorage.removeItem("user_meta");
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
   }, []);
 
   useEffect(() => {
@@ -91,6 +93,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const response = await api.post("/auth/login", { email, password });
       if (response.data?.success && response.data?.data?.user) {
+        if (response.data.data.accessToken) {
+          localStorage.setItem("access_token", response.data.data.accessToken);
+        }
+        if (response.data.data.refreshToken) {
+          localStorage.setItem("refresh_token", response.data.data.refreshToken);
+        }
         const userData: User = {
           id: response.data.data.user.id,
           email: response.data.data.user.email,

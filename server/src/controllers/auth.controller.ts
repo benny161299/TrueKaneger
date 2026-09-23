@@ -115,6 +115,8 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
           email: user.email,
           role: user.role,
         },
+        accessToken,
+        refreshToken,
       },
     });
   } catch (error) {
@@ -225,6 +227,10 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
     res.status(200).json({
       success: true,
       message: 'אסימון הגישה חודש בהצלחה',
+      data: {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+      },
     });
   } catch (error) {
     res.status(401).json({
