@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspace=packages/shared && npm run build --workspace=server",
+    "build:client": "npm run build --workspace=packages/shared && npm run build --workspace=client",
     "start": "npm run start --workspace=server"
   },
   "devDependencies": {

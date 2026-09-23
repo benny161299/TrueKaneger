@@ -191,7 +191,7 @@
 ## שלב 16 — Deploy
 
 - [x] **16.1** הגדרת MongoDB Atlas — whitelist IP, יצירת DB user (חובר בהצלחה ל-Cluster0 ב-Atlas)
-- [ ] **16.2** Deploy שרת (Render / Railway / Fly.io) עם משתני סביבה
+- [x] **16.2** Deploy שרת (Render / Railway / Fly.io) עם משתני סביבה (נפרס בהצלחה ב-Render: https://truekaneger.onrender.com)
 - [ ] **16.3** Deploy פרונטנד (Vercel / Netlify) עם `VITE_API_URL`
 - [ ] **16.4** עדכון Google OAuth Callback URL ל-URL הייצור
 - [ ] **16.5** בדיקת smoke test בסביבת ייצור: register, login, reveal, report
