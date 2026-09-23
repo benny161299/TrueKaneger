@@ -7,6 +7,10 @@
     "server",
     "packages/*"
   ],
+  "scripts": {
+    "build": "npm run build --workspace=packages/shared && npm run build --workspace=server",
+    "start": "npm run start --workspace=server"
+  },
   "devDependencies": {
     "@biomejs/biome": "2.5.1"
   }
