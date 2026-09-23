@@ -15,25 +15,25 @@ import { createContactSchema } from "shared";
 import { useContacts } from "../context/ContactsContext";
 import { StyledAlert } from "../styles/shared";
 
-// --- Styled Components ---
-
 const StyledDialogTitle = styled(DialogTitle)({
   fontFamily: '"Domine", serif',
   fontWeight: 700,
   color: "#152d3b",
-  paddingBottom: "8px",
+  padding: "16px 20px 6px",
+  fontSize: "1.2rem",
 });
 
 const StyledDialogContent = styled(DialogContent)({
   display: "flex",
   flexDirection: "column",
-  gap: "16px",
-  paddingTop: "16px !important",
-  minWidth: "360px",
+  gap: "12px",
+  padding: "6px 20px 12px !important",
+  minWidth: 0,
+  overflowX: "hidden",
 });
 
 const StyledDialogActions = styled(DialogActions)({
-  padding: "16px 24px",
+  padding: "8px 20px 16px",
   gap: "8px",
 });
 
@@ -46,14 +46,16 @@ interface AddContactDialogProps {
 }
 
 interface FieldErrors {
-  name?: string;
+  firstName?: string;
+  lastName?: string;
   phone?: string;
   email?: string;
 }
 
 export function AddContactDialog({ open, onClose, onSuccess }: AddContactDialogProps) {
   const { addContact } = useContacts();
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -61,7 +63,8 @@ export function AddContactDialog({ open, onClose, onSuccess }: AddContactDialogP
   const [loading, setLoading] = useState(false);
 
   const resetForm = () => {
-    setName("");
+    setFirstName("");
+    setLastName("");
     setPhone("");
     setEmail("");
     setFieldErrors({});
@@ -80,11 +83,12 @@ export function AddContactDialog({ open, onClose, onSuccess }: AddContactDialogP
     setFieldErrors({});
 
     // Client-side Zod validation
-    const validation = createContactSchema.safeParse({ name, phone, email });
+    const validation = createContactSchema.safeParse({ firstName, lastName, phone, email });
     if (!validation.success) {
       const formatted = validation.error.format();
       setFieldErrors({
-        name: formatted.name?._errors[0],
+        firstName: formatted.firstName?._errors[0],
+        lastName: formatted.lastName?._errors[0],
         phone: formatted.phone?._errors[0],
         email: formatted.email?._errors[0],
       });
@@ -93,8 +97,8 @@ export function AddContactDialog({ open, onClose, onSuccess }: AddContactDialogP
 
     setLoading(true);
     try {
-      await addContact(name, phone, email || undefined);
-      const addedName = name.trim();
+      await addContact({ firstName, lastName, phone, email: email || undefined });
+      const addedName = `${lastName} ${firstName}`.trim();
       resetForm();
       onClose();
       onSuccess?.(addedName);
@@ -106,25 +110,55 @@ export function AddContactDialog({ open, onClose, onSuccess }: AddContactDialogP
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm">
-      <form onSubmit={handleSubmit}>
-        <StyledDialogTitle>הוספת איש קשר</StyledDialogTitle>
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      maxWidth="xs"
+      fullWidth
+      PaperProps={{
+        sx: {
+          margin: { xs: "12px", sm: "32px" },
+          width: { xs: "calc(100% - 24px)", sm: "100%" },
+          maxWidth: "440px",
+          borderRadius: "12px",
+          overflowX: "hidden",
+        },
+      }}
+    >
+      <form onSubmit={handleSubmit} noValidate>
+        <StyledDialogTitle>הוספת איש קשר לאלפון</StyledDialogTitle>
 
         <StyledDialogContent>
           {errorMsg && <StyledAlert severity="error">{errorMsg}</StyledAlert>}
 
           <TextField
-            id="add-contact-name"
-            label="שם מלא"
-            value={name}
+            id="add-contact-last-name"
+            label="שם משפחה"
+            value={lastName}
             onChange={(e) => {
-              setName(e.target.value);
-              setFieldErrors((prev) => ({ ...prev, name: undefined }));
+              setLastName(e.target.value);
+              setFieldErrors((prev) => ({ ...prev, lastName: undefined }));
             }}
-            error={!!fieldErrors.name}
-            helperText={fieldErrors.name}
+            error={!!fieldErrors.lastName}
+            helperText={fieldErrors.lastName}
+            size="small"
             required
             autoFocus
+            fullWidth
+          />
+
+          <TextField
+            id="add-contact-first-name"
+            label="שם פרטי"
+            value={firstName}
+            onChange={(e) => {
+              setFirstName(e.target.value);
+              setFieldErrors((prev) => ({ ...prev, firstName: undefined }));
+            }}
+            error={!!fieldErrors.firstName}
+            helperText={fieldErrors.firstName}
+            size="small"
+            required
             fullWidth
           />
 
@@ -138,15 +172,17 @@ export function AddContactDialog({ open, onClose, onSuccess }: AddContactDialogP
               setFieldErrors((prev) => ({ ...prev, phone: undefined }));
             }}
             error={!!fieldErrors.phone}
-            helperText={fieldErrors.phone ?? "פורמט: 05X-XXXXXXX"}
+            helperText={fieldErrors.phone ?? ""}
+            size="small"
             required
             fullWidth
-            inputProps={{ dir: "ltr" }}
+            inputProps={{ dir: "ltr", style: { textAlign: "right" } }}
           />
 
           <TextField
             id="add-contact-email"
             label="אימייל (אופציונלי)"
+            placeholder="example@mail.com"
             type="email"
             value={email}
             onChange={(e) => {
@@ -155,8 +191,9 @@ export function AddContactDialog({ open, onClose, onSuccess }: AddContactDialogP
             }}
             error={!!fieldErrors.email}
             helperText={fieldErrors.email}
+            size="small"
             fullWidth
-            inputProps={{ dir: "ltr" }}
+            inputProps={{ dir: "ltr", style: { textAlign: "right" } }}
           />
         </StyledDialogContent>
 

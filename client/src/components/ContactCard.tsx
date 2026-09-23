@@ -137,6 +137,8 @@ export function ReportBreakdownContent({
 
 export interface ContactData {
   _id: string;
+  firstName?: string;
+  lastName?: string;
   name: string;
   reportCount: number;
   reportBreakdown?: Record<string, number>;
@@ -152,7 +154,7 @@ interface ContactCardItemProps {
 // --- Component ---
 
 export function ContactCardItem({ contact: c, onOpenDrawer }: ContactCardItemProps) {
-  const initial = c.name ? c.name.charAt(0) : "?";
+  const initial = (c.lastName || c.name || "?").trim().charAt(0);
   const [popoverAnchor, setPopoverAnchor] = useState<HTMLElement | null>(null);
 
   const handleOpenReports = (event: React.MouseEvent<HTMLElement>) => {
@@ -172,7 +174,9 @@ export function ContactCardItem({ contact: c, onOpenDrawer }: ContactCardItemPro
       <StyledCardContent>
         <ContactHeader>
           <ContactAvatar>{initial}</ContactAvatar>
-          <ContactName variant="h6">{c.name}</ContactName>
+          <ContactName variant="h6">
+            {c.lastName ? `${c.lastName} ${c.firstName || ''}`.trim() : c.name}
+          </ContactName>
 
           {c.reportCount > 0 && (
             <>

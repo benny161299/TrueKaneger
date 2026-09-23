@@ -1,3 +1,4 @@
+import { Logout as LogoutIcon } from "@mui/icons-material";
 import { Box, Button, Toolbar, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
@@ -10,28 +11,42 @@ const CustomToolbar = styled(Toolbar)({
   maxWidth: "1280px",
   width: "100%",
   margin: "0 auto",
-  padding: "0 24px",
+  padding: "0 12px",
   boxSizing: "border-box",
+  "@media (min-width: 600px)": {
+    padding: "0 24px",
+  },
 });
 
 const LogoText = styled(Typography)({
   fontFamily: '"Domine", serif',
-  fontSize: "24px",
+  fontSize: "20px",
   fontWeight: 700,
   color: "#152d3b",
   textDecoration: "none",
   cursor: "pointer",
+  whiteSpace: "nowrap",
+  "@media (min-width: 600px)": {
+    fontSize: "24px",
+  },
 });
 
 const NavActions = styled(Box)({
   display: "flex",
   alignItems: "center",
-  gap: "16px",
+  gap: "8px",
+  "@media (min-width: 600px)": {
+    gap: "16px",
+  },
 });
 
 const UserEmailText = styled(Typography)({
   fontSize: "14px",
   color: "#4a6171",
+  display: "none",
+  "@media (min-width: 700px)": {
+    display: "block",
+  },
 });
 
 export function Header() {
@@ -48,12 +63,19 @@ export function Header() {
           {user ? (
             <>
               {user.role === "admin" && (
-                <Button color="secondary" onClick={() => navigate("/admin")}>
+                <Button size="small" color="secondary" onClick={() => navigate("/admin")}>
                   ניהול
                 </Button>
               )}
               <UserEmailText variant="body2">{user.email}</UserEmailText>
-              <Button variant="outlined" color="primary" onClick={logout}>
+              <Button
+                variant="outlined"
+                color="primary"
+                size="small"
+                onClick={logout}
+                startIcon={<LogoutIcon />}
+                style={{ whiteSpace: "nowrap", minWidth: "auto" }}
+              >
                 התנתק
               </Button>
             </>

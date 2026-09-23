@@ -11,12 +11,16 @@ import {
   Alert,
   Box,
   Button,
+  Card,
+  CardActions,
+  CardContent,
   Chip,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   InputAdornment,
   Paper,
   Snackbar,
@@ -147,13 +151,22 @@ export function AdminUsersTab() {
           )}
         </Box>
 
-        <Box style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <Box
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            flex: "1 1 220px",
+            maxWidth: "380px",
+            width: "100%",
+          }}
+        >
           <TextField
             size="small"
             placeholder="חיפוש לפי אימייל..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ width: "240px" }}
+            fullWidth
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -168,6 +181,7 @@ export function AdminUsersTab() {
             variant="outlined"
             size="small"
             disabled={loading}
+            style={{ whiteSpace: "nowrap" }}
           >
             רענן
           </Button>
@@ -220,142 +234,283 @@ export function AdminUsersTab() {
           </Typography>
         </Box>
       ) : (
-        /* Users Table (13.6) */
-        <TableContainer
-          component={Paper}
-          variant="outlined"
-          style={{ borderRadius: "12px", borderColor: "#d0d7de" }}
-        >
-          <Table>
-            <TableHead style={{ backgroundColor: "#f8fafc" }}>
-              <TableRow>
-                <TableCell style={{ fontWeight: 700, color: "#152d3b" }}>אימייל</TableCell>
-                <TableCell style={{ fontWeight: 700, color: "#152d3b" }}>תפקיד</TableCell>
-                <TableCell style={{ fontWeight: 700, color: "#152d3b" }}>סטטוס</TableCell>
-                <TableCell style={{ fontWeight: 700, color: "#152d3b" }}>תאריך הצטרפות</TableCell>
-                <TableCell align="left" style={{ fontWeight: 700, color: "#152d3b" }}>
-                  פעולות
-                </TableCell>
-              </TableRow>
-            </TableHead>
+        <>
+          {/* Mobile Card View (< md) - מותאם למובייל ללא גלילה אופקית */}
+          <Box sx={{ display: { xs: "flex", md: "none" }, flexDirection: "column", gap: "12px" }}>
+            {filteredUsers.map((u) => {
+              const isSelf = currentAdmin?.email === u.email;
 
-            <TableBody>
-              {filteredUsers.map((u) => {
-                const isSelf = currentAdmin?.email === u.email;
-
-                return (
-                  <TableRow key={u._id} hover>
-                    {/* Email */}
-                    <TableCell>
-                      <Box style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <PersonIcon fontSize="small" style={{ color: "#73787c" }} />
-                        <Typography variant="body2" style={{ fontWeight: 600 }}>
+              return (
+                <Card
+                  key={u._id}
+                  variant="outlined"
+                  sx={{
+                    borderRadius: "10px",
+                    borderColor: "#d0d7de",
+                    backgroundColor: "#ffffff",
+                  }}
+                >
+                  <CardContent sx={{ padding: "14px 14px 10px !important" }}>
+                    {/* Header: User icon, email, "אתה" chip */}
+                    <Box style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", flexWrap: "wrap", marginBottom: "8px" }}>
+                      <Box style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, flex: 1 }}>
+                        <PersonIcon fontSize="small" style={{ color: "#73787c", flexShrink: 0 }} />
+                        <Typography
+                          variant="body2"
+                          style={{
+                            fontWeight: 700,
+                            color: "#152d3b",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            direction: "ltr",
+                            textAlign: "right",
+                          }}
+                        >
                           {u.email}
                         </Typography>
-                        {isSelf && (
-                          <Chip
-                            label="אתה"
-                            size="small"
-                            color="info"
-                            style={{ height: "20px", fontSize: "11px" }}
-                          />
-                        )}
                       </Box>
-                    </TableCell>
+                      {isSelf && (
+                        <Chip
+                          label="אתה"
+                          size="small"
+                          color="info"
+                          style={{ height: "20px", fontSize: "11px", flexShrink: 0 }}
+                        />
+                      )}
+                    </Box>
 
-                    {/* Role */}
-                    <TableCell>
+                    {/* Badges: Role and Status */}
+                    <Box style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "8px" }}>
                       {u.role === "admin" ? (
                         <Chip
-                          icon={<AdminPanelSettingsIcon style={{ fontSize: "16px" }} />}
+                          icon={<AdminPanelSettingsIcon style={{ fontSize: "14px" }} />}
                           label="מנהל"
                           size="small"
                           color="error"
-                          style={{ fontWeight: 600 }}
+                          style={{ fontWeight: 600, height: "24px" }}
                         />
                       ) : (
                         <Chip
                           label="משתמש"
                           size="small"
                           variant="outlined"
-                          style={{ fontWeight: 500 }}
+                          style={{ fontWeight: 500, height: "24px" }}
                         />
                       )}
-                    </TableCell>
 
-                    {/* Status */}
-                    <TableCell>
                       {u.isBanned ? (
                         <Chip
-                          icon={<BlockIcon style={{ fontSize: "14px" }} />}
+                          icon={<BlockIcon style={{ fontSize: "13px" }} />}
                           label="חסום"
                           size="small"
                           color="error"
-                          style={{ fontWeight: 600 }}
+                          style={{ fontWeight: 600, height: "24px" }}
                         />
                       ) : (
                         <Chip
-                          icon={<CheckCircleIcon style={{ fontSize: "14px" }} />}
+                          icon={<CheckCircleIcon style={{ fontSize: "13px" }} />}
                           label="פעיל"
                           size="small"
                           color="success"
                           variant="outlined"
-                          style={{ fontWeight: 500 }}
+                          style={{ fontWeight: 500, height: "24px" }}
                         />
                       )}
-                    </TableCell>
+                    </Box>
 
-                    {/* CreatedAt */}
-                    <TableCell>
-                      <Typography variant="caption" style={{ color: "#73787c" }}>
-                        {formatDate(u.createdAt)}
+                    {/* Join Date */}
+                    <Typography variant="caption" style={{ color: "#73787c", display: "block" }}>
+                      הצטרף/ה: {formatDate(u.createdAt)}
+                    </Typography>
+                  </CardContent>
+
+                  {/* Actions */}
+                  <Divider />
+                  <CardActions sx={{ padding: "8px 14px", justifyContent: "flex-end" }}>
+                    {isSelf ? (
+                      <Typography variant="caption" style={{ color: "#94a3b8" }}>
+                        אינך יכול לחסום את עצמך
                       </Typography>
-                    </TableCell>
+                    ) : u.isBanned ? (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="success"
+                        startIcon={<LockOpenIcon />}
+                        onClick={() =>
+                          setTargetUserForBan({
+                            user: u,
+                            newBannedStatus: false,
+                          })
+                        }
+                      >
+                        בטל חסימה
+                      </Button>
+                    ) : (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="error"
+                        startIcon={<BlockIcon />}
+                        onClick={() =>
+                          setTargetUserForBan({
+                            user: u,
+                            newBannedStatus: true,
+                          })
+                        }
+                      >
+                        חסום משתמש
+                      </Button>
+                    )}
+                  </CardActions>
+                </Card>
+              );
+            })}
+          </Box>
 
-                    {/* Actions */}
-                    <TableCell align="left">
-                      {isSelf ? (
-                        <Typography variant="caption" style={{ color: "#94a3b8" }}>
-                          אינך יכול לחסום את עצמך
+          {/* Desktop Table View (>= md) */}
+          <TableContainer
+            component={Paper}
+            variant="outlined"
+            sx={{
+              display: { xs: "none", md: "block" },
+              borderRadius: "12px",
+              borderColor: "#d0d7de",
+              overflowX: "auto",
+            }}
+          >
+            <Table>
+              <TableHead style={{ backgroundColor: "#f8fafc" }}>
+                <TableRow>
+                  <TableCell style={{ fontWeight: 700, color: "#152d3b" }}>אימייל</TableCell>
+                  <TableCell style={{ fontWeight: 700, color: "#152d3b" }}>תפקיד</TableCell>
+                  <TableCell style={{ fontWeight: 700, color: "#152d3b" }}>סטטוס</TableCell>
+                  <TableCell style={{ fontWeight: 700, color: "#152d3b" }}>תאריך הצטרפות</TableCell>
+                  <TableCell align="left" style={{ fontWeight: 700, color: "#152d3b" }}>
+                    פעולות
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+
+              <TableBody>
+                {filteredUsers.map((u) => {
+                  const isSelf = currentAdmin?.email === u.email;
+
+                  return (
+                    <TableRow key={u._id} hover>
+                      {/* Email */}
+                      <TableCell>
+                        <Box style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <PersonIcon fontSize="small" style={{ color: "#73787c" }} />
+                          <Typography variant="body2" style={{ fontWeight: 600 }}>
+                            {u.email}
+                          </Typography>
+                          {isSelf && (
+                            <Chip
+                              label="אתה"
+                              size="small"
+                              color="info"
+                              style={{ height: "20px", fontSize: "11px" }}
+                            />
+                          )}
+                        </Box>
+                      </TableCell>
+
+                      {/* Role */}
+                      <TableCell>
+                        {u.role === "admin" ? (
+                          <Chip
+                            icon={<AdminPanelSettingsIcon style={{ fontSize: "16px" }} />}
+                            label="מנהל"
+                            size="small"
+                            color="error"
+                            style={{ fontWeight: 600 }}
+                          />
+                        ) : (
+                          <Chip
+                            label="משתמש"
+                            size="small"
+                            variant="outlined"
+                            style={{ fontWeight: 500 }}
+                          />
+                        )}
+                      </TableCell>
+
+                      {/* Status */}
+                      <TableCell>
+                        {u.isBanned ? (
+                          <Chip
+                            icon={<BlockIcon style={{ fontSize: "14px" }} />}
+                            label="חסום"
+                            size="small"
+                            color="error"
+                            style={{ fontWeight: 600 }}
+                          />
+                        ) : (
+                          <Chip
+                            icon={<CheckCircleIcon style={{ fontSize: "14px" }} />}
+                            label="פעיל"
+                            size="small"
+                            color="success"
+                            variant="outlined"
+                            style={{ fontWeight: 500 }}
+                          />
+                        )}
+                      </TableCell>
+
+                      {/* CreatedAt */}
+                      <TableCell>
+                        <Typography variant="caption" style={{ color: "#73787c" }}>
+                          {formatDate(u.createdAt)}
                         </Typography>
-                      ) : u.isBanned ? (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="success"
-                          startIcon={<LockOpenIcon />}
-                          onClick={() =>
-                            setTargetUserForBan({
-                              user: u,
-                              newBannedStatus: false,
-                            })
-                          }
-                        >
-                          בטל חסימה
-                        </Button>
-                      ) : (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="error"
-                          startIcon={<BlockIcon />}
-                          onClick={() =>
-                            setTargetUserForBan({
-                              user: u,
-                              newBannedStatus: true,
-                            })
-                          }
-                        >
-                          חסום משתמש
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                      </TableCell>
+
+                      {/* Actions */}
+                      <TableCell align="left">
+                        {isSelf ? (
+                          <Typography variant="caption" style={{ color: "#94a3b8" }}>
+                            אינך יכול לחסום את עצמך
+                          </Typography>
+                        ) : u.isBanned ? (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="success"
+                            startIcon={<LockOpenIcon />}
+                            onClick={() =>
+                              setTargetUserForBan({
+                                user: u,
+                                newBannedStatus: false,
+                              })
+                            }
+                          >
+                            בטל חסימה
+                          </Button>
+                        ) : (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="error"
+                            startIcon={<BlockIcon />}
+                            onClick={() =>
+                              setTargetUserForBan({
+                                user: u,
+                                newBannedStatus: true,
+                              })
+                            }
+                          >
+                            חסום משתמש
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
       )}
 
       {/* Confirmation Dialog for Toggling Ban (13.7) */}

@@ -1,9 +1,10 @@
-import { Search as SearchIcon } from "@mui/icons-material";
+import { FilterList as FilterListIcon, Search as SearchIcon } from "@mui/icons-material";
 import {
   Alert,
   Box,
   Button,
   CircularProgress,
+  Collapse,
   Pagination,
   Snackbar,
   TextField,
@@ -22,12 +23,6 @@ import { PageTitle, StyledAlert, UnderlineBar } from "../styles/shared";
 
 // --- Styled Components (page-specific) ---
 
-const SearchBarWrapper = styled(Box)({
-  marginTop: "16px",
-  marginBottom: "4px",
-  maxWidth: "480px",
-});
-
 const SearchField = styled(TextField)({
   width: "100%",
   "& .MuiOutlinedInput-root": {
@@ -36,11 +31,51 @@ const SearchField = styled(TextField)({
   },
 });
 
+const AlphabetFilterBar = styled(Box)({
+  display: "flex",
+  flexWrap: "wrap",
+  justifyContent: "center",
+  alignItems: "center",
+  gap: "6px",
+  margin: "6px 0 16px",
+  padding: "14px",
+  backgroundColor: "#f4f8fb",
+  borderRadius: "10px",
+  border: "1px solid #dbe6ef",
+  boxSizing: "border-box",
+  width: "100%",
+});
+
+const LetterButton = styled(Button, {
+  shouldForwardProp: (prop) => prop !== "active",
+})<{ active?: boolean }>(({ active }) => ({
+  minWidth: "36px",
+  height: "36px",
+  padding: "0 8px",
+  fontSize: "14px",
+  fontWeight: active ? 700 : 500,
+  borderRadius: "6px",
+  backgroundColor: active ? "#152d3b" : "#ffffff",
+  color: active ? "#ffffff" : "#244255",
+  border: active ? "1px solid #152d3b" : "1px solid #cfdce5",
+  boxShadow: active ? "0 2px 4px rgba(0,0,0,0.12)" : "none",
+  transition: "all 0.15s ease",
+  "&:hover": {
+    backgroundColor: active ? "#1d3d50" : "#e4eff7",
+    borderColor: "#152d3b",
+  },
+}));
+
+const HEBREW_LETTERS = [
+  "הכל", "א", "ב", "ג", "ד", "ה", "ו", "ז", "ח", "ט", "י",
+  "כ", "ל", "מ", "נ", "ס", "ע", "פ", "צ", "ק", "ר", "ש", "ת"
+];
+
 const ContactsGrid = styled(Box)({
   display: "grid",
   gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
   gap: "24px",
-  marginTop: "24px",
+  marginTop: "20px",
 });
 
 const PaginationWrapper = styled(Box)({
@@ -71,6 +106,10 @@ export function HomePage() {
   const [revealingId, setRevealingId] = useState<string | null>(null);
   const [revealError, setRevealError] = useState<string | undefined>(undefined);
 
+  // Alphabetical letter filter state
+  const [selectedLetter, setSelectedLetter] = useState("הכל");
+  const [showLetterFilter, setShowLetterFilter] = useState(false);
+
   // Search state — searchInput drives the visible input value,
   // searchQuery is the debounced value used to filter contacts.
   const [searchInput, setSearchInput] = useState("");
@@ -90,11 +129,46 @@ export function HomePage() {
     }, 300);
   };
 
+  const handleLetterClick = (letter: string) => {
+    setSelectedLetter(letter);
+    setPage(1);
+  };
+
   const filteredContacts = useMemo(() => {
-    if (!searchQuery.trim()) return contacts;
-    const q = searchQuery.trim().toLowerCase();
-    return contacts.filter((c) => c.name.toLowerCase().includes(q));
-  }, [contacts, searchQuery]);
+    let list = [...contacts];
+
+    // 1. חיפוש חופשי (בדיקה על שם משפחה, שם פרטי או שם מלא)
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter((c) => {
+        const first = (c.firstName || "").toLowerCase();
+        const last = (c.lastName || "").toLowerCase();
+        const full = (c.name || "").toLowerCase();
+        return first.includes(q) || last.includes(q) || full.includes(q);
+      });
+    }
+
+    // 2. סינון לפי אות עברית נבחרת
+    if (selectedLetter && selectedLetter !== "הכל") {
+      list = list.filter((c) => {
+        const target = (c.lastName || c.name || "").trim();
+        return target.startsWith(selectedLetter);
+      });
+    }
+
+    // 3. מיון עולה א'-ב' לפי שם משפחה ואז שם פרטי
+    list.sort((a, b) => {
+      const lastA = (a.lastName || a.name || "").trim();
+      const lastB = (b.lastName || b.name || "").trim();
+      const cmp = lastA.localeCompare(lastB, "he");
+      if (cmp !== 0) return cmp;
+      const firstA = (a.firstName || "").trim();
+      const firstB = (b.firstName || "").trim();
+      return firstA.localeCompare(firstB, "he");
+    });
+
+    return list;
+  }, [contacts, searchQuery, selectedLetter]);
 
   const totalPages = Math.max(
     1,
@@ -192,32 +266,88 @@ export function HomePage() {
 
       {error && <StyledAlert severity="error">{error}</StyledAlert>}
 
-      <SearchBarWrapper>
-        <SearchField
-          id="contacts-search"
-          placeholder="חפש איש קשר..."
-          value={searchInput}
-          onChange={handleSearchChange}
-          size="small"
-          InputProps={{
-            startAdornment: (
-              <SearchIcon
-                fontSize="small"
-                style={{ color: "#73787c", marginLeft: "8px" }}
-              />
-            ),
-          }}
-        />
-      </SearchBarWrapper>
+      {/* סרגל חיפוש וכפתור סינון */}
+      <Box
+        style={{
+          display: "flex",
+          gap: "12px",
+          alignItems: "center",
+          flexWrap: "wrap",
+          marginTop: "16px",
+          marginBottom: "12px",
+        }}
+      >
+        <Box style={{ flex: "1 1 280px", maxWidth: "480px" }}>
+          <SearchField
+            id="contacts-search"
+            placeholder="חפש לפי שם משפחה או שם פרטי..."
+            value={searchInput}
+            onChange={handleSearchChange}
+            size="small"
+            InputProps={{
+              startAdornment: (
+                <SearchIcon
+                  fontSize="small"
+                  style={{ color: "#73787c", marginLeft: "8px" }}
+                />
+              ),
+            }}
+          />
+        </Box>
 
-      {searchQuery ? (
+        <Button
+          id="toggle-letter-filter-btn"
+          variant={selectedLetter !== "הכל" || showLetterFilter ? "contained" : "outlined"}
+          onClick={() => setShowLetterFilter((prev) => !prev)}
+          startIcon={<FilterListIcon />}
+          size="medium"
+          style={{
+            height: "40px",
+            borderColor: selectedLetter !== "הכל" || showLetterFilter ? "#152d3b" : "#cfdce5",
+            backgroundColor: selectedLetter !== "הכל" ? "#152d3b" : showLetterFilter ? "#eaf2f8" : "#ffffff",
+            color: selectedLetter !== "הכל" ? "#ffffff" : "#244255",
+            fontWeight: 600,
+            borderRadius: "8px",
+          }}
+        >
+          {selectedLetter !== "הכל" ? `סינון: אות "${selectedLetter}"` : "סינון"}
+        </Button>
+      </Box>
+
+      {/* תיבת אותיות שנפתחת בלחיצה על כפתור הסינון */}
+      <Collapse in={showLetterFilter}>
+        <AlphabetFilterBar
+          role="toolbar"
+          aria-label="סרגל אותיות לסינון לפי א'-ב'"
+          style={{
+            direction: "rtl",
+            display: "flex",
+            flexWrap: "wrap",
+            justifyContent: "center",
+          }}
+        >
+          {HEBREW_LETTERS.map((letter) => (
+            <LetterButton
+              key={letter}
+              active={selectedLetter === letter}
+              onClick={() => handleLetterClick(letter)}
+              aria-pressed={selectedLetter === letter}
+              size="small"
+            >
+              {letter}
+            </LetterButton>
+          ))}
+        </AlphabetFilterBar>
+      </Collapse>
+
+      {searchQuery || selectedLetter !== "הכל" ? (
         <Typography
           variant="body2"
           style={{ color: "#4a6171", marginBottom: "8px" }}
         >
           {filteredContacts.length === 0
-            ? `לא נמצאו תוצאות עבור "${searchQuery}"`
-            : `מוצגים ${filteredContacts.length} מתוך ${contacts.length} אנשי קשר`}
+            ? `לא נמצאו תוצאות ${selectedLetter !== "הכל" ? `תחת האות "${selectedLetter}"` : ""} ${searchQuery ? `עבור "${searchQuery}"` : ""}`
+            : `מוצגים ${filteredContacts.length} אנשי קשר ${selectedLetter !== "הכל" ? `(אות "${selectedLetter}")` : ""} מתוך ${contacts.length}`}
         </Typography>
       ) : (
         contacts.length > 0 && (
@@ -225,7 +355,7 @@ export function HomePage() {
             variant="body2"
             style={{ color: "#4a6171", marginBottom: "8px" }}
           >
-            {`מוצגים ${(page - 1) * ITEMS_PER_PAGE + 1}–${Math.min(page * ITEMS_PER_PAGE, contacts.length)} מתוך ${contacts.length} אנשי קשר`}
+            {`מוצגים ${(page - 1) * ITEMS_PER_PAGE + 1}–${Math.min(page * ITEMS_PER_PAGE, contacts.length)} מתוך ${contacts.length} אנשי קשר (ממוין א'–ת')`}
           </Typography>
         )
       )}

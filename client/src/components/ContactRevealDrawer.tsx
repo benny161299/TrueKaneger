@@ -388,7 +388,7 @@ function DrawerBody({
           >
             <CircularProgress />
             <Typography variant="body2" style={{ color: "#4a6171" }}>
-              מאחזר פרטים...
+             
             </Typography>
           </Box>
         )}

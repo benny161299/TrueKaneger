@@ -4,8 +4,11 @@ import { api } from "../services/api";
 
 export interface ContactListItem {
   _id: string;
+  firstName?: string;
+  lastName?: string;
   name: string;
   reportCount: number;
+  hasReported?: boolean;
   reportBreakdown?: Record<string, number>;
 }
 
@@ -13,8 +16,13 @@ interface ContactsContextType {
   contacts: ContactListItem[];
   loading: boolean;
   error: string | null;
-  fetchContacts: () => Promise<void>;
-  addContact: (name: string, phone: string, email?: string) => Promise<void>;
+  fetchContacts: (letter?: string) => Promise<void>;
+  addContact: (
+    param1: string | { firstName?: string; lastName?: string; name?: string; phone: string; email?: string },
+    param2?: string,
+    param3?: string,
+    param4?: string
+  ) => Promise<void>;
   revealContact: (
     id: string,
   ) => Promise<{
@@ -44,11 +52,12 @@ export function ContactsProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchContacts = useCallback(async () => {
+  const fetchContacts = useCallback(async (letter?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.get("/contacts");
+      const url = letter && letter !== 'הכל' ? `/contacts?letter=${encodeURIComponent(letter)}` : '/contacts';
+      const response = await api.get(url);
       if (response.data?.success) {
         setContacts(response.data.data);
       } else {
@@ -64,11 +73,30 @@ export function ContactsProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const addContact = async (name: string, phone: string, email?: string) => {
+  const addContact = async (
+    param1: string | { firstName?: string; lastName?: string; name?: string; phone: string; email?: string },
+    param2?: string,
+    param3?: string,
+    param4?: string
+  ) => {
     try {
-      const response = await api.post("/contacts", { name, phone, email });
+      let payload: any;
+      if (typeof param1 === 'object') {
+        payload = param1;
+      } else if (param4 !== undefined) {
+        payload = { firstName: param1, lastName: param2, phone: param3, email: param4 };
+      } else if (param3 !== undefined) {
+        if (/^05/.test(param2 || '')) {
+          payload = { name: param1, phone: param2, email: param3 };
+        } else {
+          payload = { firstName: param1, lastName: param2, phone: param3 };
+        }
+      } else {
+        payload = { name: param1, phone: param2 };
+      }
+
+      const response = await api.post("/contacts", payload);
       if (response.data?.success) {
-        // Optimistically add or simply refetch list
         await fetchContacts();
       } else {
         throw new Error(response.data?.message || "הוספת איש קשר נכשלה");

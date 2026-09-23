@@ -123,7 +123,7 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
 export const updateContactName = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { name } = req.body as UpdateContactNameInput;
+    const { name, firstName, lastName } = req.body as UpdateContactNameInput;
 
     const contact = await Contact.findById(id);
     if (!contact) {
@@ -134,7 +134,17 @@ export const updateContactName = async (req: Request, res: Response, next: NextF
       return;
     }
 
-    contact.name = name;
+    if (firstName) contact.firstName = firstName.trim();
+    if (lastName) contact.lastName = lastName.trim();
+    if (name) {
+      contact.name = name.trim();
+      if (!firstName && !lastName) {
+        contact.firstName = name.trim().split(' ')[0];
+        contact.lastName = name.trim().split(' ').slice(1).join(' ');
+      }
+    } else if (contact.firstName || contact.lastName) {
+      contact.name = `${contact.firstName || ''} ${contact.lastName || ''}`.trim();
+    }
     await contact.save();
 
     res.status(200).json({
@@ -142,6 +152,8 @@ export const updateContactName = async (req: Request, res: Response, next: NextF
       message: 'שם איש הקשר עודכן בהצלחה',
       data: {
         _id: contact._id,
+        firstName: contact.firstName,
+        lastName: contact.lastName,
         name: contact.name,
       },
     });

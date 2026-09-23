@@ -8,17 +8,37 @@ import { escapeRegex } from '../utils/sanitize.js';
 
 export const getContacts = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { search } = req.query as { search?: string };
+    const { search, letter } = req.query as { search?: string; letter?: string };
     const query: Record<string, any> = {};
 
     if (search && typeof search === 'string' && search.trim()) {
-      // חיטוי מוחלט ובריחה (escape) של כל תווים מיוחדים למניעת NoSQL Injection ו-ReDoS
       const safeSearch = escapeRegex(search.trim());
-      query.name = { $regex: safeSearch, $options: 'i' };
+      query.$or = [
+        { lastName: { $regex: safeSearch, $options: 'i' } },
+        { firstName: { $regex: safeSearch, $options: 'i' } },
+        { name: { $regex: safeSearch, $options: 'i' } },
+      ];
     }
 
-    // שליפת רשימת אנשי קשר המכילה רק מזהים, שמות ודיווחים
-    const contacts = await Contact.find(query, 'name reportCount reportedBy');
+    if (letter && typeof letter === 'string' && letter.trim() && letter.trim() !== 'הכל') {
+      const safeLetter = escapeRegex(letter.trim());
+      const letterCondition = {
+        $or: [
+          { lastName: { $regex: `^${safeLetter}`, $options: 'i' } },
+          { name: { $regex: `^${safeLetter}`, $options: 'i' } },
+        ],
+      };
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, letterCondition];
+        delete query.$or;
+      } else {
+        query.$or = letterCondition.$or;
+      }
+    }
+
+    // שליפת רשימת אנשי קשר ממוינת בסדר עולה לפי שם משפחה ואז שם פרטי
+    const contacts = await Contact.find(query, 'firstName lastName name reportCount reportedBy')
+      .sort({ lastName: 1, firstName: 1, name: 1 });
     const userId = (req as AuthenticatedRequest).user?.userId;
 
     // שליפת פירוט סיבות הדיווחים עבור אנשי קשר שיש להם דיווחים
@@ -57,9 +77,14 @@ export const getContacts = async (req: Request, res: Response, next: NextFunctio
       const hasReported = userId && cObj.reportedBy
         ? cObj.reportedBy.some((rId: any) => rId.toString() === userId.toString())
         : false;
+      const firstName = cObj.firstName || (cObj.name ? cObj.name.split(' ')[0] : '');
+      const lastName = cObj.lastName || (cObj.name ? cObj.name.split(' ').slice(1).join(' ') : '');
+      const fullName = cObj.name || `${firstName} ${lastName}`.trim();
       return {
         _id: cObj._id,
-        name: cObj.name,
+        firstName,
+        lastName,
+        name: fullName,
         reportCount: cObj.reportCount || 0,
         hasReported: !!hasReported,
         reportBreakdown: reportBreakdowns[c._id.toString()] || {},
@@ -78,7 +103,7 @@ export const getContacts = async (req: Request, res: Response, next: NextFunctio
 
 export const createContact = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    const { name, phone, email } = req.body as CreateContactInput;
+    const { firstName, lastName, name, phone, email } = req.body as CreateContactInput;
 
     if (!req.user) {
       res.status(401).json({
@@ -88,8 +113,18 @@ export const createContact = async (req: AuthenticatedRequest, res: Response, ne
       return;
     }
 
+    const resolvedFirstName = (firstName || (name ? name.split(' ')[0] : '')).trim();
+    const resolvedLastName = (lastName || (name ? name.split(' ').slice(1).join(' ') : '')).trim();
+    const fullName = (name || `${resolvedFirstName} ${resolvedLastName}`).trim();
+
     // בדיקה אם קיים כבר איש קשר עם שם ומספר טלפון זהה
-    const existingContact = await Contact.findOne({ name, phone });
+    const existingContact = await Contact.findOne({
+      phone,
+      $or: [
+        { name: fullName },
+        { firstName: resolvedFirstName, lastName: resolvedLastName },
+      ],
+    });
     if (existingContact) {
       res.status(409).json({
         success: false,
@@ -99,7 +134,9 @@ export const createContact = async (req: AuthenticatedRequest, res: Response, ne
     }
 
     const newContact = new Contact({
-      name,
+      firstName: resolvedFirstName,
+      lastName: resolvedLastName,
+      name: fullName,
       phone,
       email: email || undefined,
       createdBy: req.user.userId,
