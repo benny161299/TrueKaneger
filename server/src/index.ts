@@ -26,12 +26,12 @@ app.use(helmet());
 
 // הגדרת CORS מאובטחת לדומיין ספציפי בלבד (ללא wildcard *) עם תמיכה ב-credentials (עוגיות)
 const allowedOrigins = process.env.CLIENT_URL
-  ? process.env.CLIENT_URL.split(',').map((url) => url.trim())
+  ? process.env.CLIENT_URL.split(',').map((url: string) => url.trim())
   : ['http://localhost:5173'];
 
 app.use(
   cors({
-    origin: (origin, callback) => {
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       // בקשות ללא כותרת Origin (כמו כלי בדיקה פנימיים, Curl או Server-to-Server)
       if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) {
@@ -51,7 +51,7 @@ app.use(cookieParser()); // ⚡ מפעיל את היכולת לקרוא cookies 
 app.use(mongoSanitizeMiddleware); // 🛡️ חיטוי NoSQL Injection גלובלי לכל סוגי הבקשות
 
 // 💓 Ping & Health check endpoints for keep-alive monitoring (UptimeRobot, cron-job.org, Render)
-app.get(['/health', '/api/health', '/ping', '/api/ping'], (_req, res) => {
+app.get(['/health', '/api/health', '/ping', '/api/ping'], (_req: express.Request, res: express.Response) => {
   res.status(200).json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -70,7 +70,7 @@ app.use('/api/admin', adminRoutes);
 
 // נתיב בדיקות מיוחד לזריעת לוגים של חשיפה (מופעל רק במצב MOCK_DB)
 if (process.env.MOCK_DB === 'true') {
-  app.post('/api/test/seed-reveal-logs', async (req, res) => {
+  app.post('/api/test/seed-reveal-logs', async (req: express.Request, res: express.Response) => {
     try {
       const { userId, count, ageMs } = req.body;
       const logs = [];
