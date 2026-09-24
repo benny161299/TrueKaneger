@@ -65,6 +65,9 @@ export function AdminPage() {
           onChange={(_, newVal) => setActiveTab(newVal)}
           textColor="primary"
           indicatorColor="primary"
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
         >
           <Tab
             icon={<HourglassEmptyIcon fontSize="small" />}
