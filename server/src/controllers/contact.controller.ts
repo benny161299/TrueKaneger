@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { Contact } from '../models/Contact.js';
+import { PendingContact } from '../models/PendingContact.js';
 import { RevealLog } from '../models/RevealLog.js';
 import { Report } from '../models/Report.js';
 import type { CreateContactInput, CreateReportInput } from 'shared';
@@ -117,7 +118,7 @@ export const createContact = async (req: AuthenticatedRequest, res: Response, ne
     const resolvedLastName = (lastName || (name ? name.split(' ').slice(1).join(' ') : '')).trim();
     const fullName = (name || `${resolvedFirstName} ${resolvedLastName}`).trim();
 
-    // בדיקה אם קיים כבר איש קשר עם שם ומספר טלפון זהה
+    // בדיקה אם קיים כבר איש קשר מאושר עם אותם פרטים
     const existingContact = await Contact.findOne({
       phone,
       $or: [
@@ -133,7 +134,24 @@ export const createContact = async (req: AuthenticatedRequest, res: Response, ne
       return;
     }
 
-    const newContact = new Contact({
+    // בדיקה אם קיים כבר איש קשר ממתין לאישור עם אותם פרטים
+    const existingPending = await PendingContact.findOne({
+      phone,
+      $or: [
+        { name: fullName },
+        { firstName: resolvedFirstName, lastName: resolvedLastName },
+      ],
+    });
+    if (existingPending) {
+      res.status(409).json({
+        success: false,
+        message: 'איש קשר זה כבר נשלח ומחכה לאישור מנהל',
+      });
+      return;
+    }
+
+    // שמירה ב-PendingContact (ממתין לאישור) במקום ישירות ב-Contact
+    const pendingContact = new PendingContact({
       firstName: resolvedFirstName,
       lastName: resolvedLastName,
       name: fullName,
@@ -142,12 +160,11 @@ export const createContact = async (req: AuthenticatedRequest, res: Response, ne
       createdBy: req.user.userId,
     });
 
-    await newContact.save();
+    await pendingContact.save();
 
     res.status(201).json({
       success: true,
-      message: 'איש קשר נוסף בהצלחה',
-      data: newContact,
+      message: 'איש הקשר נשלח בהצלחה ומחכה לאישור מנהל',
     });
   } catch (error) {
     next(error);

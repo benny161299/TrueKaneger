@@ -33,6 +33,22 @@ export interface AdminUserItem {
   updatedAt: string;
 }
 
+export interface PendingContactItem {
+  _id: string;
+  firstName?: string;
+  lastName?: string;
+  name: string;
+  phone: string;
+  email?: string | null;
+  status: "pending";
+  createdBy?: {
+    _id: string;
+    email: string;
+  } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const adminService = {
   async getReports(): Promise<AdminReportItem[]> {
     const res = await api.get("/admin/reports");
@@ -62,5 +78,18 @@ export const adminService = {
 
   async toggleUserBan(userId: string, isBanned: boolean): Promise<void> {
     await api.patch(`/admin/users/${userId}/ban`, { isBanned });
+  },
+
+  async getPendingContacts(): Promise<PendingContactItem[]> {
+    const res = await api.get("/admin/pending-contacts");
+    return res.data.data;
+  },
+
+  async approveContact(pendingId: string): Promise<void> {
+    await api.post(`/admin/pending-contacts/${pendingId}/approve`);
+  },
+
+  async rejectContact(pendingId: string): Promise<void> {
+    await api.delete(`/admin/pending-contacts/${pendingId}/reject`);
   },
 };

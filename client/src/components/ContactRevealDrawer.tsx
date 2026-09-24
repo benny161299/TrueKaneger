@@ -6,6 +6,7 @@ import {
   IosShare as IosShareIcon,
   PersonAdd as PersonAddIcon,
   Phone as PhoneIcon,
+  Sms as SmsIcon,
   WhatsApp as WhatsAppIcon,
   Warning as WarningIcon,
   HourglassEmpty as HourglassEmptyIcon,
@@ -587,6 +588,23 @@ function DrawerBody({
                 }}
               >
                 וואטסאפ
+              </Button>
+
+              {/* SMS */}
+              <Button
+                component="a"
+                href={`sms:${phone}`}
+                variant="outlined"
+                startIcon={<SmsIcon />}
+                size="small"
+                style={{
+                  flexGrow: 1,
+                  minWidth: "80px",
+                  color: "#1565C0",
+                  borderColor: "#1565C0",
+                }}
+              >
+                SMS
               </Button>
 
               {/* Email — only if exists */}

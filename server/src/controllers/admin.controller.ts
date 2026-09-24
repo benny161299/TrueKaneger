@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { Report } from '../models/Report.js';
 import { Contact } from '../models/Contact.js';
+import { PendingContact } from '../models/PendingContact.js';
 import { User } from '../models/User.js';
 import type { AuthenticatedRequest } from '../middlewares/auth.js';
 import type { UpdateContactNameInput, UpdateContactPhoneInput, UpdateContactEmailInput } from 'shared';
@@ -222,3 +223,82 @@ export const updateContactEmail = async (req: Request, res: Response, next: Next
   }
 };
 
+// --- Pending Contacts ---
+
+/** שליפת כל אנשי הקשר הממתינים לאישור */
+export const getPendingContacts = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const pending = await PendingContact.find()
+      .populate('createdBy', 'email')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      message: 'רשימת אנשי הקשר הממתינים נשלפה בהצלחה',
+      data: pending,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** אישור איש קשר ממתין — מעביר אותו ל-Contact ומוחק מ-PendingContact */
+export const approveContact = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+
+    const pending = await PendingContact.findById(id);
+    if (!pending) {
+      res.status(404).json({
+        success: false,
+        message: 'איש הקשר הממתין לא נמצא',
+      });
+      return;
+    }
+
+    // יצירת איש הקשר המאושר ב-Contact
+    const approved = new Contact({
+      firstName: pending.firstName,
+      lastName: pending.lastName,
+      name: pending.name,
+      phone: pending.phone,
+      email: pending.email,
+      createdBy: pending.createdBy,
+    });
+    await approved.save();
+
+    // מחיקת הרשומה מהמתינים
+    await PendingContact.findByIdAndDelete(id);
+
+    res.status(201).json({
+      success: true,
+      message: 'איש הקשר אושר ונוסף למאגר בהצלחה',
+      data: approved,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** דחיית איש קשר ממתין — מחיקה לצמיתות */
+export const rejectContact = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+
+    const deleted = await PendingContact.findByIdAndDelete(id);
+    if (!deleted) {
+      res.status(404).json({
+        success: false,
+        message: 'איש הקשר הממתין לא נמצא',
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'איש הקשר נדחה ונמחק בהצלחה',
+    });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -1,5 +1,6 @@
 import {
   AdminPanelSettings as AdminPanelSettingsIcon,
+  HourglassEmpty as HourglassEmptyIcon,
   People as PeopleIcon,
   ReportProblem as ReportProblemIcon,
 } from "@mui/icons-material";
@@ -12,6 +13,7 @@ import {
 } from "@mui/material";
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
+import { AdminPendingTab } from "../components/AdminPendingTab";
 import { AdminReportsTab } from "../components/AdminReportsTab";
 import { AdminUsersTab } from "../components/AdminUsersTab";
 import { useAuth } from "../context/AuthContext";
@@ -53,10 +55,10 @@ export function AdminPage() {
       <UnderlineBar />
 
       <Typography variant="body2" style={{ color: "#4a6171", marginBottom: "20px" }}>
-        שלום, {user.email}! כאן תוכל לנהל דיווחים פתוחים על אנשי קשר, לעדכן פרטים ולנהל הרשאות משתמשים.
+        שלום, {user.email}! כאן תוכל לנהל דיווחים פתוחים על אנשי קשר, לאשר ממתינים ולנהל הרשאות משתמשים.
       </Typography>
 
-      {/* Tabs navigation for Stage 13 */}
+      {/* Tabs navigation */}
       <Box style={{ borderBottom: "1px solid #e0e3e7", marginBottom: "24px" }}>
         <Tabs
           value={activeTab}
@@ -64,6 +66,12 @@ export function AdminPage() {
           textColor="primary"
           indicatorColor="primary"
         >
+          <Tab
+            icon={<HourglassEmptyIcon fontSize="small" />}
+            iconPosition="start"
+            label="ממתינים לאישור"
+            style={{ fontWeight: 600, minHeight: "48px" }}
+          />
           <Tab
             icon={<ReportProblemIcon fontSize="small" />}
             iconPosition="start"
@@ -79,11 +87,14 @@ export function AdminPage() {
         </Tabs>
       </Box>
 
-      {/* Tab 0: Open Reports (13.2 - 13.5) */}
-      {activeTab === 0 && <AdminReportsTab />}
+      {/* Tab 0: Pending contacts approval */}
+      {activeTab === 0 && <AdminPendingTab />}
 
-      {/* Tab 1: User Management (13.6 - 13.7) */}
-      {activeTab === 1 && <AdminUsersTab />}
+      {/* Tab 1: Open Reports */}
+      {activeTab === 1 && <AdminReportsTab />}
+
+      {/* Tab 2: User Management */}
+      {activeTab === 2 && <AdminUsersTab />}
     </Box>
   );
 }

@@ -9,7 +9,7 @@ import {
 } from 'shared';
 import { requireAuth, requireAdmin } from '../middlewares/auth.js';
 import { validateRequest } from '../middlewares/validateRequest.js';
-import { getReports, dismissReport, toggleUserBan, getUsers, updateContactName, updateContactPhone, updateContactEmail } from '../controllers/admin.controller.js';
+import { getReports, dismissReport, toggleUserBan, getUsers, updateContactName, updateContactPhone, updateContactEmail, getPendingContacts, approveContact, rejectContact } from '../controllers/admin.controller.js';
 import { deleteContact } from '../controllers/contact.controller.js';
 
 const router = Router();
@@ -37,5 +37,16 @@ router.patch('/contacts/:id/email', requireAuth, requireAdmin, validateRequest({
 
 // נתיב למחיקת איש קשר (מנהל בלבד, מוגן JWT, ולידציית מזהה ב-Zod)
 router.delete('/contacts/:id', requireAuth, requireAdmin, validateRequest({ params: mongoIdParamSchema }), deleteContact);
+
+// --- Pending Contacts ---
+
+// שליפת כל אנשי הקשר הממתינים לאישור
+router.get('/pending-contacts', requireAuth, requireAdmin, getPendingContacts);
+
+// אישור איש קשר ממתין
+router.post('/pending-contacts/:id/approve', requireAuth, requireAdmin, validateRequest({ params: mongoIdParamSchema }), approveContact);
+
+// דחיית איש קשר ממתין
+router.delete('/pending-contacts/:id/reject', requireAuth, requireAdmin, validateRequest({ params: mongoIdParamSchema }), rejectContact);
 
 export default router;
