@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import type { AuthenticatedRequest } from './auth.js';
 import { RevealLog } from '../models/RevealLog.js';
 import { Contact } from '../models/Contact.js';
+import { PendingContact } from '../models/PendingContact.js';
 
 export const CONTACT_CREATION_LIMITS = {
   WINDOW_5M: { windowMs: 5 * 60 * 1000, maxContacts: 5, label: '5 דקות' },
@@ -90,19 +91,29 @@ export const checkRevealRateLimit = async (req: AuthenticatedRequest, res: Respo
     const thresholdCheck = checkRateLimitThresholds({ count5m, count1h, count1d });
 
     if (thresholdCheck.isExceeded && thresholdCheck.windowMs) {
-      const windowStart = new Date(now.getTime() - thresholdCheck.windowMs);
-      const oldestLog = await RevealLog.findOne({ userId, timestamp: { $gte: windowStart } })
-        .sort({ timestamp: 1 });
+      // דרגה ראשונה (5 דקות): מציגים למשתמש את זמן ההמתנה בדקות
+      if (thresholdCheck.tier === '5m') {
+        const windowStart = new Date(now.getTime() - thresholdCheck.windowMs);
+        const oldestLog = await RevealLog.findOne({ userId, timestamp: { $gte: windowStart } })
+          .sort({ timestamp: 1 });
 
-      if (oldestLog) {
-        const waitTimeMinutes = calculateWaitTimeMinutes(oldestLog.timestamp, thresholdCheck.windowMs, now.getTime());
-        res.status(429).json({
-          success: false,
-          message: formatRateLimitMessage(waitTimeMinutes),
-          waitTimeMinutes,
-        });
-        return;
+        if (oldestLog) {
+          const waitTimeMinutes = calculateWaitTimeMinutes(oldestLog.timestamp, thresholdCheck.windowMs, now.getTime());
+          res.status(429).json({
+            success: false,
+            message: formatRateLimitMessage(waitTimeMinutes),
+            waitTimeMinutes,
+          });
+          return;
+        }
       }
+
+      // דרגות גבוהות (שעה ו-24 שעות): לא חושפים זמן מדויק כדי למנוע תזמון סקריפטים וקצירת מידע
+      res.status(429).json({
+        success: false,
+        message: 'הגעת למגבלת הגילויים. אנא נסה שוב מאוחר יותר',
+      });
+      return;
     }
 
     next();
@@ -133,20 +144,40 @@ export const checkContactCreationRateLimit = async (
     const userId = req.user.userId;
     const now = Date.now();
 
-    // 1. בדיקת חלון 5 דקות (חסימת בוטים / סקריפט ספאם מהיר)
-    const count5m = await Contact.countDocuments({
-      createdBy: userId,
-      createdAt: { $gte: new Date(now - CONTACT_CREATION_LIMITS.WINDOW_5M.windowMs) },
-    });
+    // 1. בדיקת חלון 5 דקות (דרגה ראשונה — מציגים זמן המתנה)
+    const [approved5m, pending5m] = await Promise.all([
+      Contact.countDocuments({
+        createdBy: userId,
+        createdAt: { $gte: new Date(now - CONTACT_CREATION_LIMITS.WINDOW_5M.windowMs) },
+      }),
+      PendingContact.countDocuments({
+        createdBy: userId,
+        createdAt: { $gte: new Date(now - CONTACT_CREATION_LIMITS.WINDOW_5M.windowMs) },
+      }),
+    ]);
+    const count5m = approved5m + pending5m;
 
     if (count5m >= CONTACT_CREATION_LIMITS.WINDOW_5M.maxContacts) {
-      const oldestIn5m = await Contact.findOne(
-        { createdBy: userId, createdAt: { $gte: new Date(now - CONTACT_CREATION_LIMITS.WINDOW_5M.windowMs) } },
-        'createdAt',
-        { sort: { createdAt: 1 } }
-      );
-      const waitMinutes = oldestIn5m
-        ? calculateWaitTimeMinutes(oldestIn5m.createdAt, CONTACT_CREATION_LIMITS.WINDOW_5M.windowMs, now)
+      const [oldestApproved, oldestPending] = await Promise.all([
+        Contact.findOne(
+          { createdBy: userId, createdAt: { $gte: new Date(now - CONTACT_CREATION_LIMITS.WINDOW_5M.windowMs) } },
+          'createdAt',
+          { sort: { createdAt: 1 } }
+        ),
+        PendingContact.findOne(
+          { createdBy: userId, createdAt: { $gte: new Date(now - CONTACT_CREATION_LIMITS.WINDOW_5M.windowMs) } },
+          'createdAt',
+          { sort: { createdAt: 1 } }
+        ),
+      ]);
+
+      const candidates = [oldestApproved?.createdAt, oldestPending?.createdAt].filter(Boolean) as (Date | number)[];
+      const oldestDate = candidates.length > 0
+        ? candidates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0]
+        : null;
+
+      const waitMinutes = oldestDate
+        ? calculateWaitTimeMinutes(oldestDate, CONTACT_CREATION_LIMITS.WINDOW_5M.windowMs, now)
         : 5;
 
       res.status(429).json({
@@ -156,25 +187,23 @@ export const checkContactCreationRateLimit = async (
       return;
     }
 
-    // 2. בדיקת חלון 1 שעה (חסימת הצפה איטית מתמשכת)
-    const count1h = await Contact.countDocuments({
-      createdBy: userId,
-      createdAt: { $gte: new Date(now - CONTACT_CREATION_LIMITS.WINDOW_1H.windowMs) },
-    });
+    // 2. בדיקת חלון 1 שעה (דרגה שנייה — הודעה כללית ללא חשיפת תזמון)
+    const [approved1h, pending1h] = await Promise.all([
+      Contact.countDocuments({
+        createdBy: userId,
+        createdAt: { $gte: new Date(now - CONTACT_CREATION_LIMITS.WINDOW_1H.windowMs) },
+      }),
+      PendingContact.countDocuments({
+        createdBy: userId,
+        createdAt: { $gte: new Date(now - CONTACT_CREATION_LIMITS.WINDOW_1H.windowMs) },
+      }),
+    ]);
+    const count1h = approved1h + pending1h;
 
     if (count1h >= CONTACT_CREATION_LIMITS.WINDOW_1H.maxContacts) {
-      const oldestIn1h = await Contact.findOne(
-        { createdBy: userId, createdAt: { $gte: new Date(now - CONTACT_CREATION_LIMITS.WINDOW_1H.windowMs) } },
-        'createdAt',
-        { sort: { createdAt: 1 } }
-      );
-      const waitMinutes = oldestIn1h
-        ? calculateWaitTimeMinutes(oldestIn1h.createdAt, CONTACT_CREATION_LIMITS.WINDOW_1H.windowMs, now)
-        : 60;
-
       res.status(429).json({
         success: false,
-        message: formatContactRateLimitMessage(waitMinutes),
+        message: 'הגעת למגבלת הוספת אנשי קשר. אנא נסה שוב מאוחר יותר',
       });
       return;
     }
