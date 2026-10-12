@@ -203,7 +203,7 @@ export function AddContactDialog({ open, onClose, onSuccess }: AddContactDialogP
 
           <TextField
             id="add-contact-non-kosher-phone"
-            label="מספר לא כשר / סמארטפון"
+            label="מספר לא כשר"
             placeholder="052-1234567"
             value={nonKosherPhone}
             onChange={(e) => {

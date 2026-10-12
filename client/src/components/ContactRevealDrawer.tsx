@@ -562,7 +562,7 @@ function DrawerBody({
             {nonKosherPhone && (
               <Box style={{ marginBottom: "16px" }}>
                 <Typography variant="caption" style={{ color: "#152d3b", fontWeight: 700, display: "block", marginBottom: "4px" }}>
-                  מספר לא כשר / סמארטפון
+                  מספר לא כשר
                 </Typography>
                 <Tooltip
                   title={copiedField === "nonKosher" ? "הועתק ללוח!" : "לחץ להעתקת המספר"}
