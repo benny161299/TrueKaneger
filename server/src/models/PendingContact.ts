@@ -4,7 +4,10 @@ export interface IPendingContact extends Document {
   firstName?: string;
   lastName?: string;
   name: string;
-  phone: string;
+  phone?: string;
+  kosherPhone?: string;
+  nonKosherPhone?: string;
+  machzor?: string;
   email?: string;
   status: 'pending';
   createdBy: mongoose.Types.ObjectId;
@@ -29,7 +32,22 @@ const PendingContactSchema: Schema = new Schema(
     },
     phone: {
       type: String,
-      required: true,
+      required: false,
+      trim: true,
+    },
+    kosherPhone: {
+      type: String,
+      required: false,
+      trim: true,
+    },
+    nonKosherPhone: {
+      type: String,
+      required: false,
+      trim: true,
+    },
+    machzor: {
+      type: String,
+      required: false,
       trim: true,
     },
     email: {

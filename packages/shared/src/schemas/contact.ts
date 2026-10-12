@@ -7,15 +7,24 @@ const lastNameRule = z.string().trim().min(2, 'שם משפחה חייב להכי
 const phoneRule = z.string().trim().regex(/^05\d-?\d{7}$/, 'מספר טלפון לא חוקי');
 const emailRule = z.string().trim().email('כתובת אימייל לא חוקית').optional().or(z.literal(''));
 
+export const optionalPhoneRule = phoneRule.optional().or(z.literal(''));
+export const machzorRule = z.string().trim().max(30, 'מספר מחזור ארוך מדי').optional().or(z.literal(''));
+
 export const createContactSchema = z.object({
   firstName: firstNameRule.optional(),
   lastName: lastNameRule.optional(),
   name: nameRule.optional(),
-  phone: phoneRule,
+  phone: optionalPhoneRule,
+  kosherPhone: optionalPhoneRule,
+  nonKosherPhone: optionalPhoneRule,
+  machzor: machzorRule,
   email: emailRule,
 }).refine((data) => (data.firstName && data.lastName) || data.name, {
   message: 'יש להזין שם פרטי ושם משפחה (או שם מלא)',
   path: ['firstName'],
+}).refine((data) => (Boolean(data.kosherPhone) || Boolean(data.nonKosherPhone) || Boolean(data.phone)), {
+  message: 'יש להזין לפחות מספר טלפון אחד (כשר או לא כשר)',
+  path: ['kosherPhone'],
 });
 
 export const updateContactNameSchema = z.object({
@@ -25,7 +34,16 @@ export const updateContactNameSchema = z.object({
 });
 
 export const updateContactPhoneSchema = z.object({
-  phone: phoneRule,
+  phone: optionalPhoneRule,
+  kosherPhone: optionalPhoneRule,
+  nonKosherPhone: optionalPhoneRule,
+}).refine((data) => Boolean(data.phone) || Boolean(data.kosherPhone) || Boolean(data.nonKosherPhone), {
+  message: 'יש להזין לפחות מספר טלפון אחד',
+  path: ['phone'],
+});
+
+export const updateContactMachzorSchema = z.object({
+  machzor: machzorRule,
 });
 
 export const updateContactEmailSchema = z.object({
@@ -46,6 +64,7 @@ export const contactsQuerySchema = z.object({
 export type CreateContactInput = z.infer<typeof createContactSchema>;
 export type UpdateContactNameInput = z.infer<typeof updateContactNameSchema>;
 export type UpdateContactPhoneInput = z.infer<typeof updateContactPhoneSchema>;
+export type UpdateContactMachzorInput = z.infer<typeof updateContactMachzorSchema>;
 export type UpdateContactEmailInput = z.infer<typeof updateContactEmailSchema>;
 export type MongoIdParamInput = z.infer<typeof mongoIdParamSchema>;
 export type ContactsQueryInput = z.infer<typeof contactsQuerySchema>;

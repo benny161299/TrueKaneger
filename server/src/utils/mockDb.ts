@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { User } from '../models/User.js';
 import { Contact } from '../models/Contact.js';
+import { PendingContact } from '../models/PendingContact.js';
 import { RevealLog } from '../models/RevealLog.js';
 import { Report } from '../models/Report.js';
 import bcrypt from 'bcrypt';
@@ -24,9 +25,7 @@ export const setupMockDb = () => {
   // 2. Mock User model methods
   // Save helper
   const mockSave = async function(this: any) {
-    if (this.email === 'admin@kaneger.com' || this.email.endsWith('@admin.com')) {
-      this.role = 'admin';
-    }
+    // role נקבע בעת יצירת האובייקט — לא דרך אימייל
     const existingIndex = mockUsers.findIndex(u => u._id.toString() === this._id.toString());
     if (existingIndex > -1) {
       mockUsers[existingIndex] = this;
@@ -132,6 +131,12 @@ export const setupMockDb = () => {
     if (!this.createdAt) {
       this.createdAt = new Date();
     }
+    if (!this.reportedBy) {
+      this.reportedBy = [];
+    }
+    if (this.reportCount === undefined) {
+      this.reportCount = 0;
+    }
     this.updatedAt = new Date();
     const existingIndex = mockContacts.findIndex(c => c._id.toString() === this._id.toString());
     if (existingIndex > -1) {
@@ -142,52 +147,94 @@ export const setupMockDb = () => {
     return this;
   };
 
-  Contact.find = (async (query: any, projection: any) => {
-    let filtered = mockContacts;
-    if (query && query.name) {
-      if (query.name.$regex) {
-        const regex = new RegExp(query.name.$regex, query.name.$options || '');
-        filtered = filtered.filter(c => regex.test(c.name));
-      } else if (typeof query.name === 'string') {
-        filtered = filtered.filter(c => c.name === query.name);
-      }
-    }
-
-    return filtered.map(c => {
-      if (typeof projection === 'string' && projection.includes('name')) {
-        return {
-          _id: c._id,
-          name: c.name,
-          reportCount: c.reportCount || 0,
-          reportedBy: c.reportedBy || [],
-          toObject: function() {
-            return {
-              _id: c._id,
-              name: c.name,
-              reportCount: c.reportCount || 0,
-              reportedBy: c.reportedBy || [],
-            };
-          },
-        };
-      }
-      return c;
-    });
-  }) as any;
-
-  Contact.findById = ((id: any) => {
+  Contact.find = ((query: any, projection: any) => {
     const exec = async () => {
-      const contact = mockContacts.find(c => c._id.toString() === id.toString()) || null;
-      if (!contact) return null;
-      const cObj = contact.toObject ? contact.toObject() : { ...contact };
-      const creator = mockUsers.find(u => u._id.toString() === (contact.createdBy?.toString() || ''));
-      if (creator) {
-        cObj.createdBy = { _id: creator._id, email: creator.email };
+      let filtered = mockContacts;
+      if (query && query.$or) {
+        filtered = filtered.filter(c => {
+          return query.$or.some((cond: any) => {
+            if (cond.name?.$regex) {
+              return new RegExp(cond.name.$regex, cond.name.$options || '').test(c.name || '');
+            }
+            if (cond.firstName?.$regex) {
+              return new RegExp(cond.firstName.$regex, cond.firstName.$options || '').test(c.firstName || '');
+            }
+            if (cond.lastName?.$regex) {
+              return new RegExp(cond.lastName.$regex, cond.lastName.$options || '').test(c.lastName || '');
+            }
+            if (cond.machzor?.$regex) {
+              return new RegExp(cond.machzor.$regex, cond.machzor.$options || '').test(c.machzor || '');
+            }
+            return false;
+          });
+        });
+      } else if (query && query.name) {
+        if (query.name.$regex) {
+          const regex = new RegExp(query.name.$regex, query.name.$options || '');
+          filtered = filtered.filter(c => regex.test(c.name));
+        } else if (typeof query.name === 'string') {
+          filtered = filtered.filter(c => c.name === query.name);
+        }
       }
-      return cObj;
+
+      return filtered.map(c => {
+        if (typeof projection === 'string' && projection.includes('name')) {
+          return {
+            _id: c._id,
+            firstName: c.firstName,
+            lastName: c.lastName,
+            name: c.name,
+            machzor: c.machzor,
+            reportCount: c.reportCount || 0,
+            reportedBy: c.reportedBy || [],
+            toObject: function() {
+              return {
+                _id: c._id,
+                firstName: c.firstName,
+                lastName: c.lastName,
+                name: c.name,
+                machzor: c.machzor,
+                reportCount: c.reportCount || 0,
+                reportedBy: c.reportedBy || [],
+              };
+            },
+          };
+        }
+        return c;
+      });
     };
 
     const queryObj = {
-      populate: () => queryObj,
+      sort: () => queryObj,
+      then: (onfulfilled?: any, onrejected?: any) => exec().then(onfulfilled, onrejected),
+      exec,
+    };
+    return queryObj;
+  }) as any;
+
+  Contact.findById = ((id: any) => {
+    let populateFields: string[] = [];
+    const exec = async () => {
+      const contact = mockContacts.find(c => c._id.toString() === id.toString()) || null;
+      if (!contact) return null;
+      if (!contact.reportedBy) {
+        contact.reportedBy = [];
+      }
+      if (populateFields.includes('createdBy')) {
+        const creatorId = contact.createdBy?._id || contact.createdBy;
+        const creator = mockUsers.find(u => u._id.toString() === (creatorId?.toString() || ''));
+        if (creator) {
+          contact.createdBy = { _id: creator._id, email: creator.email };
+        }
+      }
+      return contact;
+    };
+
+    const queryObj = {
+      populate: (path: string) => {
+        populateFields.push(path);
+        return queryObj;
+      },
       then: (onfulfilled?: any, onrejected?: any) => exec().then(onfulfilled, onrejected),
       exec,
     };
@@ -196,11 +243,39 @@ export const setupMockDb = () => {
 
   Contact.findOne = ((query: any, projection?: any, options?: any) => {
     const exec = async () => {
+      if (query?.$and) {
+        return mockContacts.find(p => {
+          const nameCond = query.$and[0];
+          const phoneCond = query.$and[1];
+          let nameMatch = false;
+          if (nameCond?.$or) {
+            nameMatch = nameCond.$or.some((c: any) =>
+              (c.name && c.name === p.name) ||
+              (c.firstName && c.firstName === p.firstName && c.lastName === p.lastName)
+            );
+          }
+          let phoneMatch = false;
+          if (phoneCond?.$or) {
+            phoneMatch = phoneCond.$or.some((c: any) => {
+              const inList = c.phone?.$in || c.kosherPhone?.$in || c.nonKosherPhone?.$in || [];
+              return (
+                (p.phone && inList.includes(p.phone)) ||
+                (p.kosherPhone && inList.includes(p.kosherPhone)) ||
+                (p.nonKosherPhone && inList.includes(p.nonKosherPhone))
+              );
+            });
+          }
+          return nameMatch && phoneMatch;
+        }) || null;
+      }
       if (query && query.name && query.phone) {
         return mockContacts.find(c => c.name === query.name && c.phone === query.phone) || null;
       }
       if (query && query.createdBy) {
-        let matches = mockContacts.filter(c => c.createdBy?.toString() === query.createdBy.toString());
+        let matches = mockContacts.filter(c => {
+          const creatorId = c.createdBy?._id ? c.createdBy._id.toString() : c.createdBy?.toString();
+          return creatorId === query.createdBy.toString();
+        });
         if (query.createdAt?.$gte) {
           const gteTime = query.createdAt.$gte instanceof Date ? query.createdAt.$gte.getTime() : query.createdAt.$gte;
           matches = matches.filter(c => (c.createdAt ? new Date(c.createdAt).getTime() : Date.now()) >= gteTime);
@@ -224,7 +299,10 @@ export const setupMockDb = () => {
   Contact.countDocuments = (async (query: any) => {
     let list = mockContacts;
     if (query?.createdBy) {
-      list = list.filter(c => c.createdBy?.toString() === query.createdBy.toString());
+      list = list.filter(c => {
+        const creatorId = c.createdBy?._id ? c.createdBy._id.toString() : c.createdBy?.toString();
+        return creatorId === query.createdBy.toString();
+      });
     }
     if (query?.createdAt?.$gte) {
       const gteTime = query.createdAt.$gte instanceof Date ? query.createdAt.$gte.getTime() : query.createdAt.$gte;
@@ -411,4 +489,90 @@ export const setupMockDb = () => {
     }
     return contact;
   }) as any;
+
+  // 4. Mock PendingContact model methods
+  const mockPending: any[] = [];
+
+  PendingContact.prototype.save = async function(this: any) {
+    if (!this._id) {
+      this._id = new mongoose.Types.ObjectId();
+    }
+    if (!this.createdAt) {
+      this.createdAt = new Date();
+    }
+    this.updatedAt = new Date();
+    const existingIndex = mockPending.findIndex(c => c._id.toString() === this._id.toString());
+    if (existingIndex > -1) {
+      mockPending[existingIndex] = this;
+    } else {
+      mockPending.push(this);
+    }
+    return this;
+  };
+
+  PendingContact.find = (() => {
+    const exec = async () => mockPending;
+    const queryObj = {
+      populate: () => queryObj,
+      sort: () => queryObj,
+      then: (onfulfilled?: any, onrejected?: any) => exec().then(onfulfilled, onrejected),
+      exec,
+    };
+    return queryObj;
+  }) as any;
+
+  PendingContact.findOne = ((query: any) => {
+    const exec = async () => {
+      if (query?.$and) {
+        return mockPending.find(p => {
+          const nameCond = query.$and[0];
+          const phoneCond = query.$and[1];
+          let nameMatch = false;
+          if (nameCond?.$or) {
+            nameMatch = nameCond.$or.some((c: any) =>
+              (c.name && c.name === p.name) ||
+              (c.firstName && c.firstName === p.firstName && c.lastName === p.lastName)
+            );
+          }
+          let phoneMatch = false;
+          if (phoneCond?.$or) {
+            phoneMatch = phoneCond.$or.some((c: any) => {
+              const inList = c.phone?.$in || c.kosherPhone?.$in || c.nonKosherPhone?.$in || [];
+              return (
+                (p.phone && inList.includes(p.phone)) ||
+                (p.kosherPhone && inList.includes(p.kosherPhone)) ||
+                (p.nonKosherPhone && inList.includes(p.nonKosherPhone))
+              );
+            });
+          }
+          return nameMatch && phoneMatch;
+        }) || null;
+      }
+      return null;
+    };
+    const queryObj = {
+      then: (onfulfilled?: any, onrejected?: any) => exec().then(onfulfilled, onrejected),
+      exec,
+    };
+    return queryObj;
+  }) as any;
+
+  PendingContact.findById = ((id: any) => {
+    const exec = async () => mockPending.find(c => c._id.toString() === id.toString()) || null;
+    const queryObj = {
+      populate: () => queryObj,
+      then: (onfulfilled?: any, onrejected?: any) => exec().then(onfulfilled, onrejected),
+      exec,
+    };
+    return queryObj;
+  }) as any;
+
+  PendingContact.findByIdAndDelete = (async (id: any) => {
+    const index = mockPending.findIndex(c => c._id.toString() === id.toString());
+    if (index > -1) {
+      return mockPending.splice(index, 1)[0];
+    }
+    return null;
+  }) as any;
 };
+

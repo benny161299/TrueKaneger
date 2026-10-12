@@ -3,16 +3,17 @@ import { registerSchema, loginSchema } from 'shared';
 import { validateRequest } from '../middlewares/validateRequest.js';
 import { register, login, logout, refresh, googleAuthRedirect, googleAuthCallback, getMe } from '../controllers/auth.controller.js';
 import { requireAuth } from '../middlewares/auth.js';
+import { authRateLimiter, googleAuthRateLimiter } from '../middlewares/rateLimiter.js';
 
 const router = Router();
 
-// הראוט מקושר ל-Middleware של הולידציה שבנינו בשלב 2.6 וללוגיקת הקונטרולר
-router.post('/register', validateRequest({ body: registerSchema }), register);
-router.post('/login', validateRequest({ body: loginSchema }), login);
+// נתיבי אימות מוגנים באמצעות Rate Limiting, ולידציה ו-JWT
+router.post('/register', authRateLimiter, validateRequest({ body: registerSchema }), register);
+router.post('/login', authRateLimiter, validateRequest({ body: loginSchema }), login);
 router.post('/logout', logout);
 router.post('/refresh', refresh);
 router.get('/google', googleAuthRedirect);
-router.get('/google/callback', googleAuthCallback);
+router.get('/google/callback', googleAuthRateLimiter, googleAuthCallback);
 router.get('/me', requireAuth, getMe);
 
 export default router;

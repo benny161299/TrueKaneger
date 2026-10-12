@@ -1,4 +1,4 @@
-import type { Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import type { AuthenticatedRequest } from './auth.js';
 import { RevealLog } from '../models/RevealLog.js';
 import { Contact } from '../models/Contact.js';
@@ -184,4 +184,82 @@ export const checkContactCreationRateLimit = async (
     next(error);
   }
 };
+
+/**
+ * מנגנון Rate Limit כללי מבוסס כתובת IP בזיכרון (In-Memory IP Rate Limiter)
+ * מתאים לנתיבי אימות (Auth), הרשמה ו-OAuth Callbacks למניעת התקפות מניעת שירות ו-Brute Force
+ */
+export interface IpRateLimitOptions {
+  windowMs: number;
+  maxRequests: number;
+  message?: string;
+}
+
+export const createIpRateLimiter = (options: IpRateLimitOptions) => {
+  const ipRequests = new Map<string, { count: number; resetTime: number }>();
+
+  // ניקוי תקופתי של רשומות שפג תוקפן כל 2 דקות
+  const cleanupInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [ip, data] of ipRequests.entries()) {
+      if (now > data.resetTime) {
+        ipRequests.delete(ip);
+      }
+    }
+  }, Math.min(options.windowMs, 2 * 60 * 1000));
+
+  // מאפשר לסיום התהליך לקרות ללא תלות ב-Timer
+  if (cleanupInterval.unref) {
+    cleanupInterval.unref();
+  }
+
+  return (req: Request, res: Response, next: NextFunction) => {
+    // זיהוי כתובת IP של הלקוח (תמיכה ב-trust proxy מול Render/Vercel)
+    const clientIp = (req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').toString();
+    const now = Date.now();
+
+    const record = ipRequests.get(clientIp);
+
+    if (!record || now > record.resetTime) {
+      ipRequests.set(clientIp, {
+        count: 1,
+        resetTime: now + options.windowMs,
+      });
+      return next();
+    }
+
+    if (record.count >= options.maxRequests) {
+      const waitTimeSec = Math.ceil((record.resetTime - now) / 1000);
+      res.status(429).json({
+        success: false,
+        message: options.message || `הגעת למגבלת הבקשות. נסה שוב בעוד ${waitTimeSec} שניות`,
+        retryAfter: waitTimeSec,
+      });
+      return;
+    }
+
+    record.count++;
+    next();
+  };
+};
+
+/**
+ * הגבלת קצב עבור Google OAuth Callback:
+ * עד 10 בקשות לדקה לכתובת IP (מגן מפני הצפת שרתי Google והפצצת קודים מזויפים)
+ */
+export const googleAuthRateLimiter = createIpRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 10,
+  message: 'יותר מדי ניסיונות אימות Google. נסה שוב בעוד דקה',
+});
+
+/**
+ * הגבלת קצב עבור Login ו-Register:
+ * עד 15 בקשות לדקה לכתובת IP (מגן מפני Brute Force וניסיונות ניחוש סיסמה)
+ */
+export const authRateLimiter = createIpRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 15,
+  message: 'יותר מדי ניסיונות כניסה/הרשמה. נסה שוב בעוד דקה',
+});
 

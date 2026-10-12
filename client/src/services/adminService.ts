@@ -38,7 +38,10 @@ export interface PendingContactItem {
   firstName?: string;
   lastName?: string;
   name: string;
-  phone: string;
+  phone?: string;
+  kosherPhone?: string;
+  nonKosherPhone?: string;
+  machzor?: string;
   email?: string | null;
   status: "pending";
   createdBy?: {

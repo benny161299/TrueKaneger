@@ -219,9 +219,16 @@ export function AdminPendingTab() {
                     >
                       {item.name.charAt(0)}
                     </Box>
-                    <Typography variant="subtitle1" style={{ fontWeight: 700, color: "#152d3b" }}>
-                      {item.name}
-                    </Typography>
+                    <Box>
+                      <Typography variant="subtitle1" style={{ fontWeight: 700, color: "#152d3b" }}>
+                        {item.name}
+                      </Typography>
+                      {item.machzor && (
+                        <Typography variant="caption" style={{ color: "#627d98", fontWeight: 600, display: "block" }}>
+                          מחזור {item.machzor}
+                        </Typography>
+                      )}
+                    </Box>
                   </Box>
                   <Chip
                     label="ממתין"
@@ -238,13 +245,37 @@ export function AdminPendingTab() {
 
                 <Divider style={{ marginBottom: "12px" }} />
 
-                {/* Phone */}
-                <Box style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                  <PhoneIcon style={{ color: "#627d98", fontSize: "18px" }} />
-                  <Typography variant="body2" style={{ direction: "ltr", color: "#243b53" }}>
-                    {item.phone}
-                  </Typography>
-                </Box>
+                {/* Kosher phone */}
+                {item.kosherPhone && (
+                  <Box style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                    <PhoneIcon style={{ color: "#2d6a4f", fontSize: "18px" }} />
+                    <Typography variant="body2" style={{ direction: "ltr", color: "#2d6a4f", fontWeight: 600 }}>
+                      {item.kosherPhone}
+                    </Typography>
+                    <Chip label="כשר" size="small" style={{ height: "18px", fontSize: "11px", backgroundColor: "#d8f3dc", color: "#1b4332", fontWeight: 600 }} />
+                  </Box>
+                )}
+
+                {/* Non-kosher phone */}
+                {item.nonKosherPhone && (
+                  <Box style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                    <PhoneIcon style={{ color: "#152d3b", fontSize: "18px" }} />
+                    <Typography variant="body2" style={{ direction: "ltr", color: "#243b53", fontWeight: 600 }}>
+                      {item.nonKosherPhone}
+                    </Typography>
+                    <Chip label="לא כשר" size="small" style={{ height: "18px", fontSize: "11px", backgroundColor: "#e2ecf4", color: "#152d3b", fontWeight: 600 }} />
+                  </Box>
+                )}
+
+                {/* Legacy phone (fallback) */}
+                {!item.kosherPhone && !item.nonKosherPhone && item.phone && (
+                  <Box style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                    <PhoneIcon style={{ color: "#627d98", fontSize: "18px" }} />
+                    <Typography variant="body2" style={{ direction: "ltr", color: "#243b53" }}>
+                      {item.phone}
+                    </Typography>
+                  </Box>
+                )}
 
                 {/* Email */}
                 {item.email && (

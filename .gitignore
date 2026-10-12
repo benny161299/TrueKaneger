@@ -25,6 +25,8 @@ yarn-error.log*
 
 # Test files & Playwright reports
 server/src/scripts/test-*
+server/src/scripts/importContacts.ts
+server/src/scripts/seed.ts
 client/e2e/
 client/playwright.config.ts
 test-results/

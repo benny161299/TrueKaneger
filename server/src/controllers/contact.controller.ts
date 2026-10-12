@@ -18,6 +18,7 @@ export const getContacts = async (req: Request, res: Response, next: NextFunctio
         { lastName: { $regex: safeSearch, $options: 'i' } },
         { firstName: { $regex: safeSearch, $options: 'i' } },
         { name: { $regex: safeSearch, $options: 'i' } },
+        { machzor: { $regex: safeSearch, $options: 'i' } },
       ];
     }
 
@@ -38,7 +39,7 @@ export const getContacts = async (req: Request, res: Response, next: NextFunctio
     }
 
     // שליפת רשימת אנשי קשר ממוינת בסדר עולה לפי שם משפחה ואז שם פרטי
-    const contacts = await Contact.find(query, 'firstName lastName name reportCount reportedBy')
+    const contacts = await Contact.find(query, 'firstName lastName name machzor reportCount reportedBy')
       .sort({ lastName: 1, firstName: 1, name: 1 });
     const userId = (req as AuthenticatedRequest).user?.userId;
 
@@ -86,6 +87,7 @@ export const getContacts = async (req: Request, res: Response, next: NextFunctio
         firstName,
         lastName,
         name: fullName,
+        machzor: cObj.machzor || undefined,
         reportCount: cObj.reportCount || 0,
         hasReported: !!hasReported,
         reportBreakdown: reportBreakdowns[c._id.toString()] || {},
@@ -104,7 +106,7 @@ export const getContacts = async (req: Request, res: Response, next: NextFunctio
 
 export const createContact = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    const { firstName, lastName, name, phone, email } = req.body as CreateContactInput;
+    const { firstName, lastName, name, phone, kosherPhone, nonKosherPhone, machzor, email } = req.body as CreateContactInput;
 
     if (!req.user) {
       res.status(401).json({
@@ -117,13 +119,26 @@ export const createContact = async (req: AuthenticatedRequest, res: Response, ne
     const resolvedFirstName = (firstName || (name ? name.split(' ')[0] : '')).trim();
     const resolvedLastName = (lastName || (name ? name.split(' ').slice(1).join(' ') : '')).trim();
     const fullName = (name || `${resolvedFirstName} ${resolvedLastName}`).trim();
+    const primaryPhone = kosherPhone || nonKosherPhone || phone;
+
+    const phonesToCheck = [kosherPhone, nonKosherPhone, phone].filter(Boolean) as string[];
 
     // בדיקה אם קיים כבר איש קשר מאושר עם אותם פרטים
     const existingContact = await Contact.findOne({
-      phone,
-      $or: [
-        { name: fullName },
-        { firstName: resolvedFirstName, lastName: resolvedLastName },
+      $and: [
+        {
+          $or: [
+            { name: fullName },
+            { firstName: resolvedFirstName, lastName: resolvedLastName },
+          ],
+        },
+        {
+          $or: [
+            { phone: { $in: phonesToCheck } },
+            { kosherPhone: { $in: phonesToCheck } },
+            { nonKosherPhone: { $in: phonesToCheck } },
+          ],
+        },
       ],
     });
     if (existingContact) {
@@ -136,10 +151,20 @@ export const createContact = async (req: AuthenticatedRequest, res: Response, ne
 
     // בדיקה אם קיים כבר איש קשר ממתין לאישור עם אותם פרטים
     const existingPending = await PendingContact.findOne({
-      phone,
-      $or: [
-        { name: fullName },
-        { firstName: resolvedFirstName, lastName: resolvedLastName },
+      $and: [
+        {
+          $or: [
+            { name: fullName },
+            { firstName: resolvedFirstName, lastName: resolvedLastName },
+          ],
+        },
+        {
+          $or: [
+            { phone: { $in: phonesToCheck } },
+            { kosherPhone: { $in: phonesToCheck } },
+            { nonKosherPhone: { $in: phonesToCheck } },
+          ],
+        },
       ],
     });
     if (existingPending) {
@@ -155,7 +180,10 @@ export const createContact = async (req: AuthenticatedRequest, res: Response, ne
       firstName: resolvedFirstName,
       lastName: resolvedLastName,
       name: fullName,
-      phone,
+      phone: primaryPhone,
+      kosherPhone: kosherPhone || undefined,
+      nonKosherPhone: nonKosherPhone || undefined,
+      machzor: machzor?.trim() || undefined,
       email: email || undefined,
       createdBy: req.user.userId,
     });
@@ -165,6 +193,7 @@ export const createContact = async (req: AuthenticatedRequest, res: Response, ne
     res.status(201).json({
       success: true,
       message: 'איש הקשר נשלח בהצלחה ומחכה לאישור מנהל',
+      data: pendingContact,
     });
   } catch (error) {
     next(error);
@@ -242,7 +271,10 @@ export const revealContact = async (req: AuthenticatedRequest, res: Response, ne
       success: true,
       message: 'פרטי איש הקשר נחשפו בהצלחה',
       data: {
-        phone: contact.phone,
+        phone: contact.phone || contact.kosherPhone || contact.nonKosherPhone,
+        kosherPhone: contact.kosherPhone || null,
+        nonKosherPhone: contact.nonKosherPhone || null,
+        machzor: contact.machzor || null,
         email: contact.email || null,
         hasReported: !!hasReported,
         adminMeta,

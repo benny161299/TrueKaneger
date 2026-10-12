@@ -48,7 +48,9 @@ interface AddContactDialogProps {
 interface FieldErrors {
   firstName?: string;
   lastName?: string;
-  phone?: string;
+  kosherPhone?: string;
+  nonKosherPhone?: string;
+  machzor?: string;
   email?: string;
 }
 
@@ -56,7 +58,9 @@ export function AddContactDialog({ open, onClose, onSuccess }: AddContactDialogP
   const { addContact } = useContacts();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [kosherPhone, setKosherPhone] = useState("");
+  const [nonKosherPhone, setNonKosherPhone] = useState("");
+  const [machzor, setMachzor] = useState("");
   const [email, setEmail] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [errorMsg, setErrorMsg] = useState("");
@@ -65,7 +69,9 @@ export function AddContactDialog({ open, onClose, onSuccess }: AddContactDialogP
   const resetForm = () => {
     setFirstName("");
     setLastName("");
-    setPhone("");
+    setKosherPhone("");
+    setNonKosherPhone("");
+    setMachzor("");
     setEmail("");
     setFieldErrors({});
     setErrorMsg("");
@@ -83,13 +89,22 @@ export function AddContactDialog({ open, onClose, onSuccess }: AddContactDialogP
     setFieldErrors({});
 
     // Client-side Zod validation
-    const validation = createContactSchema.safeParse({ firstName, lastName, phone, email });
+    const validation = createContactSchema.safeParse({
+      firstName,
+      lastName,
+      kosherPhone: kosherPhone || undefined,
+      nonKosherPhone: nonKosherPhone || undefined,
+      machzor: machzor || undefined,
+      email: email || undefined,
+    });
     if (!validation.success) {
       const formatted = validation.error.format();
       setFieldErrors({
         firstName: formatted.firstName?._errors[0],
         lastName: formatted.lastName?._errors[0],
-        phone: formatted.phone?._errors[0],
+        kosherPhone: formatted.kosherPhone?._errors[0],
+        nonKosherPhone: formatted.nonKosherPhone?._errors[0],
+        machzor: formatted.machzor?._errors[0],
         email: formatted.email?._errors[0],
       });
       return;
@@ -97,7 +112,15 @@ export function AddContactDialog({ open, onClose, onSuccess }: AddContactDialogP
 
     setLoading(true);
     try {
-      await addContact({ firstName, lastName, phone, email: email || undefined });
+      await addContact({
+        firstName,
+        lastName,
+        kosherPhone: kosherPhone || undefined,
+        nonKosherPhone: nonKosherPhone || undefined,
+        phone: kosherPhone || nonKosherPhone,
+        machzor: machzor || undefined,
+        email: email || undefined,
+      });
       const addedName = `${lastName} ${firstName}`.trim();
       resetForm();
       onClose();
@@ -163,20 +186,50 @@ export function AddContactDialog({ open, onClose, onSuccess }: AddContactDialogP
           />
 
           <TextField
-            id="add-contact-phone"
-            label="מספר טלפון"
+            id="add-contact-kosher-phone"
+            label="מספר כשר"
             placeholder="050-1234567"
-            value={phone}
+            value={kosherPhone}
             onChange={(e) => {
-              setPhone(e.target.value);
-              setFieldErrors((prev) => ({ ...prev, phone: undefined }));
+              setKosherPhone(e.target.value);
+              setFieldErrors((prev) => ({ ...prev, kosherPhone: undefined }));
             }}
-            error={!!fieldErrors.phone}
-            helperText={fieldErrors.phone ?? ""}
+            error={!!fieldErrors.kosherPhone}
+            helperText={fieldErrors.kosherPhone || "חיוג בלבד (ללא SMS)"}
             size="small"
-            required
             fullWidth
             inputProps={{ dir: "ltr", style: { textAlign: "right" } }}
+          />
+
+          <TextField
+            id="add-contact-non-kosher-phone"
+            label="מספר לא כשר / סמארטפון"
+            placeholder="052-1234567"
+            value={nonKosherPhone}
+            onChange={(e) => {
+              setNonKosherPhone(e.target.value);
+              setFieldErrors((prev) => ({ ...prev, nonKosherPhone: undefined }));
+            }}
+            error={!!fieldErrors.nonKosherPhone}
+            helperText={fieldErrors.nonKosherPhone || "חיוג, וואטסאפ ו-SMS"}
+            size="small"
+            fullWidth
+            inputProps={{ dir: "ltr", style: { textAlign: "right" } }}
+          />
+
+          <TextField
+            id="add-contact-machzor"
+            label="מחזור (אופציונלי)"
+            placeholder='לדוגמה: ל"ב או 32'
+            value={machzor}
+            onChange={(e) => {
+              setMachzor(e.target.value);
+              setFieldErrors((prev) => ({ ...prev, machzor: undefined }));
+            }}
+            error={!!fieldErrors.machzor}
+            helperText={fieldErrors.machzor}
+            size="small"
+            fullWidth
           />
 
           <TextField

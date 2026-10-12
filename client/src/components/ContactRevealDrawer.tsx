@@ -47,21 +47,37 @@ function toWhatsAppNumber(phone: string): string {
 }
 
 /** Generates a vCard string for downloading as .vcf */
-function generateVCard(name: string, phone: string, email?: string | null): string {
+function generateVCard(
+  name: string,
+  kosherPhone?: string | null,
+  nonKosherPhone?: string | null,
+  fallbackPhone?: string | null,
+  email?: string | null
+): string {
   const lines = [
     "BEGIN:VCARD",
     "VERSION:3.0",
     `FN:${name}`,
-    `TEL;TYPE=CELL:${phone}`,
   ];
+  if (kosherPhone) lines.push(`TEL;TYPE=CELL,KOSHER:${kosherPhone}`);
+  if (nonKosherPhone) lines.push(`TEL;TYPE=CELL:${nonKosherPhone}`);
+  if (!kosherPhone && !nonKosherPhone && fallbackPhone) {
+    lines.push(`TEL;TYPE=CELL:${fallbackPhone}`);
+  }
   if (email) lines.push(`EMAIL:${email}`);
   lines.push("END:VCARD");
   return lines.join("\r\n");
 }
 
 /** Downloads the contact as a .vcf file — iOS/Android open it as "Add Contact" */
-function downloadVCard(name: string, phone: string, email?: string | null): void {
-  const vcf = generateVCard(name, phone, email);
+function downloadVCard(
+  name: string,
+  kosherPhone?: string | null,
+  nonKosherPhone?: string | null,
+  fallbackPhone?: string | null,
+  email?: string | null
+): void {
+  const vcf = generateVCard(name, kosherPhone, nonKosherPhone, fallbackPhone, email);
   const blob = new Blob([vcf], { type: "text/vcard;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -148,6 +164,9 @@ const ActionButtonsRow = styled(Box)({
 
 export interface RevealedContactData {
   phone: string;
+  kosherPhone?: string | null;
+  nonKosherPhone?: string | null;
+  machzor?: string | null;
   email: string | null;
   hasReported?: boolean;
   adminMeta?: {
@@ -177,46 +196,37 @@ function DrawerBody({
   onOpenReport,
 }: DrawerBodyProps) {
   const initial = contact.name ? contact.name.charAt(0) : "?";
-  const phone = revealedData?.phone;
+  const kosherPhone = revealedData?.kosherPhone;
+  const nonKosherPhone = revealedData?.nonKosherPhone;
+  const legacyPhone = !kosherPhone && !nonKosherPhone ? revealedData?.phone : null;
+  const machzor = revealedData?.machzor || contact.machzor;
   const email = revealedData?.email;
 
-  const [copiedField, setCopiedField] = useState<"phone" | "email" | null>(null);
+  const [copiedField, setCopiedField] = useState<"kosher" | "nonKosher" | "phone" | "email" | null>(null);
   const [snackbarMsg, setSnackbarMsg] = useState<string | null>(null);
   const [shareAnchorEl, setShareAnchorEl] = useState<null | HTMLElement>(null);
   const [reportsAnchorEl, setReportsAnchorEl] = useState<null | HTMLElement>(null);
 
-  const handleCopyPhone = async () => {
-    if (!phone) return;
+  const handleCopyText = async (val: string, field: "kosher" | "nonKosher" | "phone" | "email", msg: string) => {
     try {
-      await navigator.clipboard.writeText(phone);
-      setCopiedField("phone");
-      setSnackbarMsg("מספר הטלפון הועתק ללוח");
+      await navigator.clipboard.writeText(val);
+      setCopiedField(field);
+      setSnackbarMsg(msg);
       setTimeout(() => {
-        setCopiedField((prev) => (prev === "phone" ? null : prev));
+        setCopiedField((prev) => (prev === field ? null : prev));
       }, 2000);
     } catch (err) {
-      console.error("Failed to copy phone:", err);
-    }
-  };
-
-  const handleCopyEmail = async () => {
-    if (!email) return;
-    try {
-      await navigator.clipboard.writeText(email);
-      setCopiedField("email");
-      setSnackbarMsg("כתובת המייל הועתקה ללוח");
-      setTimeout(() => {
-        setCopiedField((prev) => (prev === "email" ? null : prev));
-      }, 2000);
-    } catch (err) {
-      console.error("Failed to copy email:", err);
+      console.error("Failed to copy:", err);
     }
   };
 
   const buildShareText = () => {
     return [
       contact.name,
-      phone ? `טלפון: ${phone}` : "",
+      machzor ? `מחזור: ${machzor}` : "",
+      kosherPhone ? `מספר כשר: ${kosherPhone}` : "",
+      nonKosherPhone ? `מספר לא כשר: ${nonKosherPhone}` : "",
+      legacyPhone ? `טלפון: ${legacyPhone}` : "",
       email ? `מייל: ${email}` : "",
     ]
       .filter(Boolean)
@@ -280,15 +290,32 @@ function DrawerBody({
           >
             {contact.name}
           </Typography>
-          <Typography variant="body2" style={{ color: "#4a6171" }}>
-            {isRevealing
-              ? "טוען פרטי קשר..."
-              : revealedData
-                ? "פרטי קשר"
-                : revealError
-                  ? "שגיאה בטעינה"
-                  : ""}
-          </Typography>
+          <Box style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginTop: "2px" }}>
+            {machzor && (
+              <Typography
+                variant="caption"
+                style={{
+                  backgroundColor: "#e2ecf4",
+                  color: "#152d3b",
+                  fontWeight: 700,
+                  padding: "2px 8px",
+                  borderRadius: "12px",
+                  fontSize: "12px",
+                }}
+              >
+                מחזור {machzor}
+              </Typography>
+            )}
+            <Typography variant="body2" style={{ color: "#4a6171" }}>
+              {isRevealing
+                ? "טוען פרטי קשר..."
+                : revealedData
+                  ? "פרטי קשר"
+                  : revealError
+                    ? "שגיאה בטעינה"
+                    : ""}
+            </Typography>
+          </Box>
         </Box>
 
         {contact.reportCount > 0 && (
@@ -473,159 +500,294 @@ function DrawerBody({
         )}
 
         {/* Revealed data */}
-        {revealedData && phone && (
+        {revealedData && (kosherPhone || nonKosherPhone || legacyPhone) && (
           <>
-            {/* Phone row — click to copy */}
-            <Tooltip
-              title={copiedField === "phone" ? "הועתק ללוח!" : "לחץ להעתקת מספר הטלפון"}
-              placement="top"
-            >
-              <InfoRow
-                role="button"
-                tabIndex={0}
-                onClick={handleCopyPhone}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    handleCopyPhone();
-                  }
-                }}
-              >
-                <IconCircle>
-                  <PhoneIcon fontSize="small" />
-                </IconCircle>
-                <ValueText>{phone}</ValueText>
-                <Box style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  {copiedField === "phone" ? (
-                    <Box style={{ display: "flex", alignItems: "center", gap: "4px", color: "#2e7d32" }}>
-                      <CheckIcon fontSize="small" />
-                      <Typography variant="caption" style={{ fontWeight: 600, color: "#2e7d32" }}>
-                        הועתק!
-                      </Typography>
-                    </Box>
-                  ) : (
-                    <ContentCopyIcon fontSize="small" style={{ color: "#73787c", opacity: 0.6 }} />
-                  )}
-                </Box>
-              </InfoRow>
-            </Tooltip>
-
-            {/* Email row — click to copy */}
-            {email && (
-              <Tooltip
-                title={copiedField === "email" ? "הועתק ללוח!" : "לחץ להעתקת כתובת המייל"}
-                placement="top"
-              >
-                <InfoRow
-                  role="button"
-                  tabIndex={0}
-                  onClick={handleCopyEmail}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      handleCopyEmail();
-                    }
-                  }}
+            {/* Kosher phone section (CALL ONLY, NO SMS, NO WHATSAPP) */}
+            {kosherPhone && (
+              <Box style={{ marginBottom: "16px" }}>
+                <Typography variant="caption" style={{ color: "#2d6a4f", fontWeight: 700, display: "block", marginBottom: "4px" }}>
+                  מספר כשר (שיחות בלבד)
+                </Typography>
+                <Tooltip
+                  title={copiedField === "kosher" ? "הועתק ללוח!" : "לחץ להעתקת המספר הכשר"}
+                  placement="top"
                 >
-                  <IconCircle>
-                    <EmailIcon fontSize="small" />
-                  </IconCircle>
-                  <ValueText>{email}</ValueText>
-                  <Box style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    {copiedField === "email" ? (
-                      <Box style={{ display: "flex", alignItems: "center", gap: "4px", color: "#2e7d32" }}>
-                        <CheckIcon fontSize="small" />
-                        <Typography variant="caption" style={{ fontWeight: 600, color: "#2e7d32" }}>
-                          הועתק!
-                        </Typography>
-                      </Box>
-                    ) : (
-                      <ContentCopyIcon fontSize="small" style={{ color: "#73787c", opacity: 0.6 }} />
-                    )}
-                  </Box>
-                </InfoRow>
-              </Tooltip>
+                  <InfoRow
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleCopyText(kosherPhone, "kosher", "מספר הטלפון הכשר הועתק ללוח")}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleCopyText(kosherPhone, "kosher", "מספר הטלפון הכשר הועתק ללוח");
+                      }
+                    }}
+                    style={{ marginBottom: "6px" }}
+                  >
+                    <IconCircle style={{ backgroundColor: "#d8f3dc", color: "#1b4332" }}>
+                      <PhoneIcon fontSize="small" />
+                    </IconCircle>
+                    <ValueText>{kosherPhone}</ValueText>
+                    <Box style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      {copiedField === "kosher" ? (
+                        <Box style={{ display: "flex", alignItems: "center", gap: "4px", color: "#2e7d32" }}>
+                          <CheckIcon fontSize="small" />
+                          <Typography variant="caption" style={{ fontWeight: 600, color: "#2e7d32" }}>
+                            הועתק!
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <ContentCopyIcon fontSize="small" style={{ color: "#73787c", opacity: 0.6 }} />
+                      )}
+                    </Box>
+                  </InfoRow>
+                </Tooltip>
+                <ActionButtonsRow style={{ marginTop: 0 }}>
+                  <Button
+                    component="a"
+                    href={`tel:${kosherPhone}`}
+                    variant="outlined"
+                    color="primary"
+                    startIcon={<PhoneIcon />}
+                    size="small"
+                    style={{ flexGrow: 1 }}
+                  >
+                    חייג
+                  </Button>
+                </ActionButtonsRow>
+              </Box>
+            )}
+
+            {/* Non-kosher phone section (Call, WhatsApp, SMS) */}
+            {nonKosherPhone && (
+              <Box style={{ marginBottom: "16px" }}>
+                <Typography variant="caption" style={{ color: "#152d3b", fontWeight: 700, display: "block", marginBottom: "4px" }}>
+                  מספר לא כשר / סמארטפון
+                </Typography>
+                <Tooltip
+                  title={copiedField === "nonKosher" ? "הועתק ללוח!" : "לחץ להעתקת המספר"}
+                  placement="top"
+                >
+                  <InfoRow
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleCopyText(nonKosherPhone, "nonKosher", "מספר הטלפון הועתק ללוח")}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleCopyText(nonKosherPhone, "nonKosher", "מספר הטלפון הועתק ללוח");
+                      }
+                    }}
+                    style={{ marginBottom: "6px" }}
+                  >
+                    <IconCircle>
+                      <PhoneIcon fontSize="small" />
+                    </IconCircle>
+                    <ValueText>{nonKosherPhone}</ValueText>
+                    <Box style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      {copiedField === "nonKosher" ? (
+                        <Box style={{ display: "flex", alignItems: "center", gap: "4px", color: "#2e7d32" }}>
+                          <CheckIcon fontSize="small" />
+                          <Typography variant="caption" style={{ fontWeight: 600, color: "#2e7d32" }}>
+                            הועתק!
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <ContentCopyIcon fontSize="small" style={{ color: "#73787c", opacity: 0.6 }} />
+                      )}
+                    </Box>
+                  </InfoRow>
+                </Tooltip>
+                <ActionButtonsRow style={{ marginTop: 0 }}>
+                  <Button
+                    component="a"
+                    href={`tel:${nonKosherPhone}`}
+                    variant="outlined"
+                    color="primary"
+                    startIcon={<PhoneIcon />}
+                    size="small"
+                    style={{ flexGrow: 1, minWidth: "75px" }}
+                  >
+                    חייג
+                  </Button>
+                  <Button
+                    component="a"
+                    href={`https://wa.me/${toWhatsAppNumber(nonKosherPhone)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    variant="outlined"
+                    startIcon={<WhatsAppIcon />}
+                    size="small"
+                    style={{
+                      flexGrow: 1,
+                      minWidth: "75px",
+                      color: "#25D366",
+                      borderColor: "#25D366",
+                    }}
+                  >
+                    וואטסאפ
+                  </Button>
+                  <Button
+                    component="a"
+                    href={`sms:${nonKosherPhone}`}
+                    variant="outlined"
+                    startIcon={<SmsIcon />}
+                    size="small"
+                    style={{
+                      flexGrow: 1,
+                      minWidth: "75px",
+                      color: "#1565C0",
+                      borderColor: "#1565C0",
+                    }}
+                  >
+                    SMS
+                  </Button>
+                </ActionButtonsRow>
+              </Box>
+            )}
+
+            {/* Legacy phone section (fallback if contact has legacy phone only) */}
+            {legacyPhone && (
+              <Box style={{ marginBottom: "16px" }}>
+                <Tooltip
+                  title={copiedField === "phone" ? "הועתק ללוח!" : "לחץ להעתקת מספר הטלפון"}
+                  placement="top"
+                >
+                  <InfoRow
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleCopyText(legacyPhone, "phone", "מספר הטלפון הועתק ללוח")}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleCopyText(legacyPhone, "phone", "מספר הטלפון הועתק ללוח");
+                      }
+                    }}
+                    style={{ marginBottom: "6px" }}
+                  >
+                    <IconCircle>
+                      <PhoneIcon fontSize="small" />
+                    </IconCircle>
+                    <ValueText>{legacyPhone}</ValueText>
+                    <Box style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      {copiedField === "phone" ? (
+                        <Box style={{ display: "flex", alignItems: "center", gap: "4px", color: "#2e7d32" }}>
+                          <CheckIcon fontSize="small" />
+                          <Typography variant="caption" style={{ fontWeight: 600, color: "#2e7d32" }}>
+                            הועתק!
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <ContentCopyIcon fontSize="small" style={{ color: "#73787c", opacity: 0.6 }} />
+                      )}
+                    </Box>
+                  </InfoRow>
+                </Tooltip>
+                <ActionButtonsRow style={{ marginTop: 0 }}>
+                  <Button
+                    component="a"
+                    href={`tel:${legacyPhone}`}
+                    variant="outlined"
+                    color="primary"
+                    startIcon={<PhoneIcon />}
+                    size="small"
+                    style={{ flexGrow: 1, minWidth: "75px" }}
+                  >
+                    חייג
+                  </Button>
+                  <Button
+                    component="a"
+                    href={`https://wa.me/${toWhatsAppNumber(legacyPhone)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    variant="outlined"
+                    startIcon={<WhatsAppIcon />}
+                    size="small"
+                    style={{
+                      flexGrow: 1,
+                      minWidth: "75px",
+                      color: "#25D366",
+                      borderColor: "#25D366",
+                    }}
+                  >
+                    וואטסאפ
+                  </Button>
+                  <Button
+                    component="a"
+                    href={`sms:${legacyPhone}`}
+                    variant="outlined"
+                    startIcon={<SmsIcon />}
+                    size="small"
+                    style={{
+                      flexGrow: 1,
+                      minWidth: "75px",
+                      color: "#1565C0",
+                      borderColor: "#1565C0",
+                    }}
+                  >
+                    SMS
+                  </Button>
+                </ActionButtonsRow>
+              </Box>
+            )}
+
+            {/* Email row & action */}
+            {email && (
+              <Box style={{ marginBottom: "16px" }}>
+                <Tooltip
+                  title={copiedField === "email" ? "הועתק ללוח!" : "לחץ להעתקת כתובת המייל"}
+                  placement="top"
+                >
+                  <InfoRow
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleCopyText(email, "email", "כתובת המייל הועתקה ללוח")}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleCopyText(email, "email", "כתובת המייל הועתקה ללוח");
+                      }
+                    }}
+                    style={{ marginBottom: "6px" }}
+                  >
+                    <IconCircle>
+                      <EmailIcon fontSize="small" />
+                    </IconCircle>
+                    <ValueText>{email}</ValueText>
+                    <Box style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      {copiedField === "email" ? (
+                        <Box style={{ display: "flex", alignItems: "center", gap: "4px", color: "#2e7d32" }}>
+                          <CheckIcon fontSize="small" />
+                          <Typography variant="caption" style={{ fontWeight: 600, color: "#2e7d32" }}>
+                            הועתק!
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <ContentCopyIcon fontSize="small" style={{ color: "#73787c", opacity: 0.6 }} />
+                      )}
+                    </Box>
+                  </InfoRow>
+                </Tooltip>
+                <ActionButtonsRow style={{ marginTop: 0 }}>
+                  <Button
+                    component="a"
+                    href={`mailto:${email}`}
+                    variant="outlined"
+                    color="secondary"
+                    startIcon={<EmailIcon />}
+                    size="small"
+                    style={{ flexGrow: 1 }}
+                  >
+                    שלח מייל
+                  </Button>
+                </ActionButtonsRow>
+              </Box>
             )}
 
             <Divider style={{ margin: "16px 0 12px" }} />
 
-            {/* Quick action buttons */}
-            <Typography
-              variant="caption"
-              style={{ color: "#73787c", display: "block", marginBottom: "10px" }}
-            >
-              פעולות מהירות
-            </Typography>
-
-            <ActionButtonsRow>
-              {/* Call */}
-              <Button
-                component="a"
-                href={`tel:${phone}`}
-                variant="outlined"
-                color="primary"
-                startIcon={<PhoneIcon />}
-                size="small"
-                style={{ flexGrow: 1, minWidth: "80px" }}
-              >
-                חייג
-              </Button>
-
-              {/* WhatsApp */}
-              <Button
-                component="a"
-                href={`https://wa.me/${toWhatsAppNumber(phone)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                variant="outlined"
-                startIcon={<WhatsAppIcon />}
-                size="small"
-                style={{
-                  flexGrow: 1,
-                  minWidth: "80px",
-                  color: "#25D366",
-                  borderColor: "#25D366",
-                }}
-              >
-                וואטסאפ
-              </Button>
-
-              {/* SMS */}
-              <Button
-                component="a"
-                href={`sms:${phone}`}
-                variant="outlined"
-                startIcon={<SmsIcon />}
-                size="small"
-                style={{
-                  flexGrow: 1,
-                  minWidth: "80px",
-                  color: "#1565C0",
-                  borderColor: "#1565C0",
-                }}
-              >
-                SMS
-              </Button>
-
-              {/* Email — only if exists */}
-              {email && (
-                <Button
-                  component="a"
-                  href={`mailto:${email}`}
-                  variant="outlined"
-                  color="secondary"
-                  startIcon={<EmailIcon />}
-                  size="small"
-                  style={{ flexGrow: 1, minWidth: "80px" }}
-                >
-                  מייל
-                </Button>
-              )}
-            </ActionButtonsRow>
-
             {/* Secondary actions: Share + Save to Contacts */}
-            <ActionButtonsRow style={{ marginTop: "12px" }}>
-              {/* Share — menu with "העתק ללוח" and "שיתוף במכשיר" */}
+            <ActionButtonsRow>
               <Button
                 variant="contained"
                 color="primary"
@@ -645,14 +807,8 @@ function DrawerBody({
                 anchorEl={shareAnchorEl}
                 open={Boolean(shareAnchorEl)}
                 onClose={() => setShareAnchorEl(null)}
-                anchorOrigin={{
-                  vertical: "bottom",
-                  horizontal: "center",
-                }}
-                transformOrigin={{
-                  vertical: "top",
-                  horizontal: "center",
-                }}
+                anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+                transformOrigin={{ vertical: "top", horizontal: "center" }}
                 PaperProps={{
                   style: {
                     borderRadius: "10px",
@@ -685,14 +841,13 @@ function DrawerBody({
                 </MenuItem>
               </Menu>
 
-              {/* Save to Contacts — downloads .vcf (iOS/Android open as Add Contact) */}
               <Button
                 variant="outlined"
                 color="primary"
                 startIcon={<PersonAddIcon />}
                 size="small"
                 style={{ flexGrow: 1 }}
-                onClick={() => downloadVCard(contact.name, phone, email)}
+                onClick={() => downloadVCard(contact.name, kosherPhone, nonKosherPhone, legacyPhone, email)}
               >
                 שמור לאנשי קשר
               </Button>

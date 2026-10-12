@@ -140,6 +140,7 @@ export interface ContactData {
   firstName?: string;
   lastName?: string;
   name: string;
+  machzor?: string;
   reportCount: number;
   reportBreakdown?: Record<string, number>;
   hasReported?: boolean;
@@ -174,9 +175,16 @@ export function ContactCardItem({ contact: c, onOpenDrawer }: ContactCardItemPro
       <StyledCardContent>
         <ContactHeader>
           <ContactAvatar>{initial}</ContactAvatar>
-          <ContactName variant="h6">
-            {c.lastName ? `${c.lastName} ${c.firstName || ''}`.trim() : c.name}
-          </ContactName>
+          <Box style={{ flex: 1, minWidth: 0 }}>
+            <ContactName variant="h6" noWrap>
+              {c.lastName ? `${c.lastName} ${c.firstName || ''}`.trim() : c.name}
+            </ContactName>
+            {c.machzor && (
+              <Typography variant="caption" style={{ color: "#546e7a", fontWeight: 600, display: "block" }}>
+                מחזור {c.machzor}
+              </Typography>
+            )}
+          </Box>
 
           {c.reportCount > 0 && (
             <>

@@ -22,13 +22,12 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    const isAdmin = email === 'admin@kaneger.com' || email.endsWith('@admin.com');
-
-    // יצירת המשתמש החדש
+    // יצירת המשתמש החדש — תמיד עם role 'user'
+    // הרשאת admin ניתנת אך ורק דרך DB/seed ידני, לא דרך הרשמה
     const newUser = new User({
       email,
       passwordHash,
-      role: isAdmin ? 'admin' : 'user',
+      role: 'user',
     });
 
     await newUser.save();
@@ -106,6 +105,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     setTokenCookies(res, accessToken, refreshToken);
 
     // 6. החזרת תשובה במבנה ה-ApiResponse האחיד
+    // ⚠️ הטוקנים כבר הוגדרו ב-httpOnly cookies — לא מחזירים אותם ב-body כדי למנוע XSS
     res.status(200).json({
       success: true,
       message: 'התחברות בוצעה בהצלחה',
@@ -115,8 +115,6 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
           email: user.email,
           role: user.role,
         },
-        accessToken,
-        refreshToken,
       },
     });
   } catch (error) {
@@ -224,13 +222,10 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
     setTokenCookies(res, newAccessToken, newRefreshToken);
 
     // 8. החזרת תשובה במבנה ה-ApiResponse האחיד
+    // ⚠️ הטוקנים כבר הוגדרו ב-httpOnly cookies — לא מחזירים אותם ב-body
     res.status(200).json({
       success: true,
       message: 'אסימון הגישה חודש בהצלחה',
-      data: {
-        accessToken: newAccessToken,
-        refreshToken: newRefreshToken,
-      },
     });
   } catch (error) {
     res.status(401).json({

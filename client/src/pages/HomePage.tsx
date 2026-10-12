@@ -144,7 +144,8 @@ export function HomePage() {
         const first = (c.firstName || "").toLowerCase();
         const last = (c.lastName || "").toLowerCase();
         const full = (c.name || "").toLowerCase();
-        return first.includes(q) || last.includes(q) || full.includes(q);
+        const machzor = (c.machzor || "").toLowerCase();
+        return first.includes(q) || last.includes(q) || full.includes(q) || machzor.includes(q);
       });
     }
 
@@ -239,7 +240,13 @@ export function HomePage() {
       <AddContactDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        onSuccess={(name) => setSuccessMsg(`"‏${name}‏" נוסף בהצלחה!`)}
+        onSuccess={(name) =>
+          setSuccessMsg(
+            name
+              ? `איש הקשר "‏${name}‏" נוסף וממתין לאישור`
+              : "איש הקשר נוסף וממתין לאישור"
+          )
+        }
       />
       <ReportContactDialog
         open={Boolean(reportContactTarget)}
@@ -401,7 +408,7 @@ export function HomePage() {
 
       <Snackbar
         open={!!successMsg}
-        autoHideDuration={4000}
+        autoHideDuration={5000}
         onClose={() => setSuccessMsg(null)}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >

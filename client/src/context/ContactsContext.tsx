@@ -2,11 +2,14 @@ import type React from "react";
 import { createContext, useCallback, useContext, useState } from "react";
 import { api } from "../services/api";
 
+import type { CreateContactInput } from "shared";
+
 export interface ContactListItem {
   _id: string;
   firstName?: string;
   lastName?: string;
   name: string;
+  machzor?: string;
   reportCount: number;
   hasReported?: boolean;
   reportBreakdown?: Record<string, number>;
@@ -18,7 +21,7 @@ interface ContactsContextType {
   error: string | null;
   fetchContacts: (letter?: string) => Promise<void>;
   addContact: (
-    param1: string | { firstName?: string; lastName?: string; name?: string; phone: string; email?: string },
+    param1: string | CreateContactInput | Record<string, any>,
     param2?: string,
     param3?: string,
     param4?: string
@@ -27,7 +30,11 @@ interface ContactsContextType {
     id: string,
   ) => Promise<{
     phone: string;
+    kosherPhone?: string | null;
+    nonKosherPhone?: string | null;
+    machzor?: string | null;
     email: string | null;
+    hasReported?: boolean;
     adminMeta?: {
       createdByEmail: string;
       createdById: string;
@@ -74,7 +81,7 @@ export function ContactsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addContact = async (
-    param1: string | { firstName?: string; lastName?: string; name?: string; phone: string; email?: string },
+    param1: string | CreateContactInput | Record<string, any>,
     param2?: string,
     param3?: string,
     param4?: string

@@ -90,6 +90,15 @@ export const toggleUserBan = async (req: AuthenticatedRequest, res: Response, ne
       return;
     }
 
+    // מניעת חסימת admin ע"י admin אחר
+    if (user.role === 'admin') {
+      res.status(403).json({
+        success: false,
+        message: 'אין אפשרות לחסום מנהל מערכת אחר',
+      });
+      return;
+    }
+
     user.isBanned = isBanned;
     await user.save();
 
@@ -166,7 +175,7 @@ export const updateContactName = async (req: Request, res: Response, next: NextF
 export const updateContactPhone = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { phone } = req.body as UpdateContactPhoneInput;
+    const { phone, kosherPhone, nonKosherPhone } = req.body as UpdateContactPhoneInput;
 
     const contact = await Contact.findById(id);
     if (!contact) {
@@ -177,7 +186,12 @@ export const updateContactPhone = async (req: Request, res: Response, next: Next
       return;
     }
 
-    contact.phone = phone;
+    if (phone !== undefined) contact.phone = phone || undefined;
+    if (kosherPhone !== undefined) contact.kosherPhone = kosherPhone || undefined;
+    if (nonKosherPhone !== undefined) contact.nonKosherPhone = nonKosherPhone || undefined;
+    if (!contact.phone) {
+      contact.phone = contact.kosherPhone || contact.nonKosherPhone;
+    }
     await contact.save();
 
     res.status(200).json({
@@ -186,6 +200,8 @@ export const updateContactPhone = async (req: Request, res: Response, next: Next
       data: {
         _id: contact._id,
         phone: contact.phone,
+        kosherPhone: contact.kosherPhone,
+        nonKosherPhone: contact.nonKosherPhone,
       },
     });
   } catch (error) {
@@ -261,7 +277,10 @@ export const approveContact = async (req: Request, res: Response, next: NextFunc
       firstName: pending.firstName,
       lastName: pending.lastName,
       name: pending.name,
-      phone: pending.phone,
+      phone: pending.phone || pending.kosherPhone || pending.nonKosherPhone,
+      kosherPhone: pending.kosherPhone,
+      nonKosherPhone: pending.nonKosherPhone,
+      machzor: pending.machzor,
       email: pending.email,
       createdBy: pending.createdBy,
     });
