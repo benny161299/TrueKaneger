@@ -1,9 +1,18 @@
 import type { Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import { User } from '../models/User.js'; // ⚡ תוקן ליבוא מסולסל תואם למודל שלך
 import type { RegisterInput, LoginInput, CompleteProfileInput } from 'shared';
 import { generateAccessToken, generateRefreshToken, setTokenCookies, clearTokenCookies, verifyRefreshToken } from '../utils/jwt.js';
 import type { AuthenticatedRequest } from '../middlewares/auth.js';
+
+/**
+ * יצירת SHA-256 Hash עבור Refresh Token לפני שמירתו במסד הנתונים.
+ * מונע גניבת סשנים גם במקרה של דליפת מסד נתונים מלאה (Database Leak).
+ */
+export const hashToken = (token: string): string => {
+  return crypto.createHash('sha256').update(token).digest('hex');
+};
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -94,12 +103,13 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       role: user.role,
     });
 
-    // שמירת ה-refreshToken ברשימת הטוקנים הפעילים של המשתמש
+    // שמירת ה-refreshToken כ-SHA-256 Hash ברשימת הטוקנים הפעילים של המשתמש
     if (!user.refreshTokens) user.refreshTokens = [];
-    user.refreshTokens.push(refreshToken);
+    user.refreshTokens.push(hashToken(refreshToken));
     if (user.refreshTokens.length > 10) {
       user.refreshTokens.shift();
     }
+    user.markModified('refreshTokens');
     await user.save();
 
     // 5. הגדרת עוגיות המזהה במענה (עבור דפדפנים שתומכים בעוגיות כרגיל)
@@ -137,12 +147,14 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
     const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
     // ביטול והסרת ה-refreshToken ממסד הנתונים בעת התנתקות (Revocation)
+    // מוחק הן אם היה שמור כטקסט גולמי ישן והן אם שמור כ-SHA-256 Hash
     if (refreshToken) {
       try {
         const decoded = verifyRefreshToken(refreshToken);
         if (decoded?.userId) {
+          const incomingTokenHash = hashToken(refreshToken);
           await User.findByIdAndUpdate(decoded.userId, {
-            $pull: { refreshTokens: refreshToken },
+            $pull: { refreshTokens: { $in: [refreshToken, incomingTokenHash] } },
           });
         }
       } catch {
@@ -203,8 +215,24 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
       return;
     }
 
-    // 5. בדיקה קריטית: האם ה-refreshToken עדיין תקף או שבוטל בעת logout
-    if (!user.refreshTokens || !user.refreshTokens.includes(refreshToken)) {
+    // 5. בדיקה קריטית: האם ה-refreshToken עדיין תקף ב-DB (כתוקף גלוי ישן או כ-Hash חדש)
+    const incomingTokenHash = hashToken(refreshToken);
+    const tokenExists =
+      user.refreshTokens &&
+      (user.refreshTokens.includes(incomingTokenHash) ||
+        user.refreshTokens.includes(refreshToken));
+
+    if (!tokenExists) {
+      // 🚨 זיהוי פריצה ושימוש חוזר בזמן אמת (Reuse Detection):
+      // הטוקן חתום ותקין קריפטוגרפית (verifyRefreshToken עבר בהצלחה),
+      // אך הוא אינו קיים ברשימת הטוקנים המורשים (הוא כבר "נשרף" ברוטציה קודמת או נגנב).
+      // מחיקה מיידית של כל הסשנים של המשתמש כדי לנתק כל תוקף מכל המכשירים!
+      if (user.refreshTokens && user.refreshTokens.length > 0) {
+        user.refreshTokens = [];
+        user.markModified('refreshTokens');
+        await user.save();
+      }
+
       clearTokenCookies(res);
       res.status(401).json({
         success: false,
@@ -213,7 +241,7 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
       return;
     }
 
-    // 6. הנפקת אסימונים חדשים (עם רוטציית Refresh Token מלאה)
+    // 6. הנפקת אסימונים חדשים (עם רוטציית Refresh Token מלאה ושמירת Hash בלבד)
     const newAccessToken = generateAccessToken({
       userId: user._id.toString(),
       role: user.role,
@@ -222,10 +250,18 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
       userId: user._id.toString(),
       role: user.role,
     });
+    const newRefreshTokenHash = hashToken(newRefreshToken);
 
-    // החלפת הטוקן הישן בחדש במסד הנתונים
-    user.refreshTokens = user.refreshTokens.filter((t) => t !== refreshToken);
-    user.refreshTokens.push(newRefreshToken);
+    // החלפת הטוקן הישן בחדש: מוחקים גם אם היה שמור כטקסט גלוי וגם אם כ-Hash, ושומרים את ה-Hash החדש
+    if (!user.refreshTokens) user.refreshTokens = [];
+    user.refreshTokens = user.refreshTokens.filter(
+      (t) => t !== refreshToken && t !== incomingTokenHash
+    );
+    user.refreshTokens.push(newRefreshTokenHash);
+    if (user.refreshTokens.length > 10) {
+      user.refreshTokens.shift();
+    }
+    user.markModified('refreshTokens');
     await user.save();
 
     // 7. עדכון עוגיות המזהה במענה
@@ -374,10 +410,11 @@ export const googleAuthCallback = async (req: Request, res: Response, next: Next
       role: user.role,
     });
 
-    // שמירת ה-refreshToken ברשימת הטוקנים הפעילים של המשתמש
+    // שמירת ה-refreshToken כ-SHA-256 Hash ברשימת הטוקנים הפעילים של המשתמש
     if (!user.refreshTokens) user.refreshTokens = [];
-    user.refreshTokens.push(refreshToken);
+    user.refreshTokens.push(hashToken(refreshToken));
     if (user.refreshTokens.length > 10) user.refreshTokens.shift();
+    user.markModified('refreshTokens');
     await user.save();
 
     // 7. הגדרת עוגיות המזהה במענה

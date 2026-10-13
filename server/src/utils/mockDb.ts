@@ -136,9 +136,15 @@ export const setupMockDb = () => {
     if (!user.refreshTokens) user.refreshTokens = [];
 
     if (update.$pull && update.$pull.refreshTokens) {
-      user.refreshTokens = user.refreshTokens.filter(
-        (t: string) => t !== update.$pull.refreshTokens
-      );
+      if (typeof update.$pull.refreshTokens === 'object' && update.$pull.refreshTokens.$in) {
+        user.refreshTokens = user.refreshTokens.filter(
+          (t: string) => !update.$pull.refreshTokens.$in.includes(t)
+        );
+      } else {
+        user.refreshTokens = user.refreshTokens.filter(
+          (t: string) => t !== update.$pull.refreshTokens
+        );
+      }
     }
     if (update.$push && update.$push.refreshTokens) {
       user.refreshTokens.push(update.$push.refreshTokens);
