@@ -221,7 +221,7 @@ export function AdminPendingUsersTab() {
                     {item.machzor ? (
                       <Chip
                         icon={<SchoolIcon style={{ fontSize: "16px" }} />}
-                        label={`מחזור ${item.machzor}`}
+                        label={item.machzor.includes("לא זוכר") ? item.machzor : `מחזור ${item.machzor}`}
                         size="small"
                         color="primary"
                         variant="outlined"

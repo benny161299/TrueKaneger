@@ -78,7 +78,7 @@ function CompleteProfileView() {
       return;
     }
     if (!machzor.trim()) {
-      setErrorMsg("חובה להזין מחזור (למשל: כ\"ח או ל\"ב)");
+      setErrorMsg('חובה להזין מחזור (אם אינך זוכר, ניתן לכתוב "לא זוכר")');
       return;
     }
 
@@ -181,7 +181,8 @@ function CompleteProfileView() {
 
               <TextField
                 label="מחזור"
-                placeholder='לדוגמה: כ"ח או 28'
+                placeholder='לדוגמה: כ"ח (או "לא זוכר")'
+                helperText='אם אינך זוכר את המחזור, ניתן לכתוב "לא זוכר"'
                 value={machzor}
                 onChange={(e) => setMachzor(e.target.value)}
                 fullWidth
@@ -295,7 +296,10 @@ function PendingApprovalView() {
               פרטי הבקשה שנשלחו:
             </Typography>
             <Typography variant="body2" sx={{ fontWeight: 600, color: "#1e293b" }}>
-              {user?.firstName} {user?.lastName} ({user?.machzor ? `מחזור ${user.machzor}` : ""})
+              {user?.firstName} {user?.lastName}
+              {user?.machzor
+                ? ` (${user.machzor.includes("לא זוכר") ? user.machzor : `מחזור ${user.machzor}`})`
+                : ""}
             </Typography>
             {user?.phone && (
               <Typography variant="body2" sx={{ color: "#475569" }} dir="ltr">
