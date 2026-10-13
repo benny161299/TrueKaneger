@@ -50,6 +50,18 @@ export const updateContactEmailSchema = z.object({
   email: emailRule,
 });
 
+export const updateContactFullSchema = z.object({
+  firstName: firstNameRule.optional().or(z.literal('')),
+  lastName: lastNameRule.optional().or(z.literal('')),
+  name: nameRule.optional().or(z.literal('')),
+  phone: optionalPhoneRule,
+  kosherPhone: optionalPhoneRule,
+  nonKosherPhone: optionalPhoneRule,
+  machzor: machzorRule,
+  email: emailRule,
+  dismissReportId: z.string().trim().regex(/^[0-9a-fA-F]{24}$/, 'מזהה דיווח אינו תקין').optional(),
+});
+
 export const mongoIdParamSchema = z.object({
   id: z.string().trim().regex(/^[0-9a-fA-F]{24}$/, 'מזהה (ID) אינו תקין'),
 });
@@ -66,5 +78,6 @@ export type UpdateContactNameInput = z.infer<typeof updateContactNameSchema>;
 export type UpdateContactPhoneInput = z.infer<typeof updateContactPhoneSchema>;
 export type UpdateContactMachzorInput = z.infer<typeof updateContactMachzorSchema>;
 export type UpdateContactEmailInput = z.infer<typeof updateContactEmailSchema>;
+export type UpdateContactFullInput = z.infer<typeof updateContactFullSchema>;
 export type MongoIdParamInput = z.infer<typeof mongoIdParamSchema>;
 export type ContactsQueryInput = z.infer<typeof contactsQuerySchema>;

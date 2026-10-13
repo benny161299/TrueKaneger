@@ -4,8 +4,13 @@ export interface AdminReportItem {
   _id: string;
   contactId: {
     _id: string;
+    firstName?: string;
+    lastName?: string;
     name: string;
-    phone: string;
+    phone?: string;
+    kosherPhone?: string;
+    nonKosherPhone?: string;
+    machzor?: string;
     email?: string | null;
     createdBy?: {
       _id: string;
@@ -92,6 +97,23 @@ export const adminService = {
 
   async updateContactEmail(contactId: string, email: string): Promise<void> {
     await api.patch(`/admin/contacts/${contactId}/email`, { email });
+  },
+
+  async updateContactFull(
+    contactId: string,
+    data: {
+      firstName?: string;
+      lastName?: string;
+      name?: string;
+      phone?: string;
+      kosherPhone?: string;
+      machzor?: string;
+      email?: string;
+      dismissReportId?: string;
+    }
+  ): Promise<any> {
+    const res = await api.put(`/admin/contacts/${contactId}`, data);
+    return res.data;
   },
 
   async getUsers(): Promise<AdminUserItem[]> {

@@ -6,6 +6,7 @@ import {
   updateContactNameSchema as updateNameSchema,
   updateContactPhoneSchema as updatePhoneSchema,
   updateContactEmailSchema as updateEmailSchema,
+  updateContactFullSchema,
 } from 'shared';
 import { requireAuth, requireAdmin } from '../middlewares/auth.js';
 import { validateRequest } from '../middlewares/validateRequest.js';
@@ -17,6 +18,7 @@ import {
   updateContactName,
   updateContactPhone,
   updateContactEmail,
+  updateContactFull,
   getPendingContacts,
   approveContact,
   rejectContact,
@@ -57,6 +59,10 @@ router.patch('/contacts/:id/phone', requireAuth, requireAdmin, validateRequest({
 
 // נתיב לעדכון מייל (מנהל בלבד, מוגן JWT, ולידציית מזהה וגוף ב-Zod)
 router.patch('/contacts/:id/email', requireAuth, requireAdmin, validateRequest({ params: mongoIdParamSchema, body: updateEmailSchema }), updateContactEmail);
+
+// נתיב לעדכון מלא של כל פרטי איש הקשר ואפשרות לסגירת דיווח (מנהל בלבד, מוגן JWT, ולידציית מזהה וגוף ב-Zod)
+router.put('/contacts/:id', requireAuth, requireAdmin, validateRequest({ params: mongoIdParamSchema, body: updateContactFullSchema }), updateContactFull);
+router.patch('/contacts/:id', requireAuth, requireAdmin, validateRequest({ params: mongoIdParamSchema, body: updateContactFullSchema }), updateContactFull);
 
 // נתיב למחיקת איש קשר (מנהל בלבד, מוגן JWT, ולידציית מזהה ב-Zod)
 router.delete('/contacts/:id', requireAuth, requireAdmin, validateRequest({ params: mongoIdParamSchema }), deleteContact);

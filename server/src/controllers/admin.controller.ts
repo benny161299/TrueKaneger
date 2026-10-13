@@ -4,7 +4,12 @@ import { Contact } from '../models/Contact.js';
 import { PendingContact } from '../models/PendingContact.js';
 import { User } from '../models/User.js';
 import type { AuthenticatedRequest } from '../middlewares/auth.js';
-import type { UpdateContactNameInput, UpdateContactPhoneInput, UpdateContactEmailInput } from 'shared';
+import type {
+  UpdateContactNameInput,
+  UpdateContactPhoneInput,
+  UpdateContactEmailInput,
+  UpdateContactFullInput,
+} from 'shared';
 
 export const getReports = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -12,7 +17,7 @@ export const getReports = async (req: Request, res: Response, next: NextFunction
     const reports = await Report.find()
       .populate({
         path: 'contactId',
-        select: 'name phone email createdBy createdAt',
+        select: 'firstName lastName name phone kosherPhone nonKosherPhone machzor email createdBy createdAt',
         populate: {
           path: 'createdBy',
           select: 'email',
@@ -236,6 +241,77 @@ export const updateContactEmail = async (req: Request, res: Response, next: Next
         _id: contact._id,
         email: contact.email,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** עדכון מלא של כל פרטי איש הקשר עם אפשרות לסגירת דיווח במקביל */
+export const updateContactFull = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const {
+      firstName,
+      lastName,
+      name,
+      phone,
+      kosherPhone,
+      nonKosherPhone,
+      machzor,
+      email,
+      dismissReportId,
+    } = req.body as UpdateContactFullInput;
+
+    const contact = await Contact.findById(id);
+    if (!contact) {
+      res.status(404).json({
+        success: false,
+        message: 'איש הקשר לא נמצא במערכת',
+      });
+      return;
+    }
+
+    if (firstName !== undefined) contact.firstName = firstName ? firstName.trim() : undefined;
+    if (lastName !== undefined) contact.lastName = lastName ? lastName.trim() : undefined;
+
+    if (name) {
+      contact.name = name.trim();
+    } else if (contact.firstName || contact.lastName) {
+      contact.name = `${contact.firstName || ''} ${contact.lastName || ''}`.trim();
+    }
+
+    if (phone !== undefined) contact.phone = phone ? phone.trim() : undefined;
+    if (kosherPhone !== undefined) contact.kosherPhone = kosherPhone ? kosherPhone.trim() : undefined;
+    if (nonKosherPhone !== undefined) contact.nonKosherPhone = nonKosherPhone ? nonKosherPhone.trim() : undefined;
+
+    // ודא שלפחות שדה phone ראשי מוגדר
+    if (!contact.phone) {
+      contact.phone = contact.kosherPhone || contact.nonKosherPhone;
+    }
+
+    if (machzor !== undefined) contact.machzor = machzor ? machzor.trim() : undefined;
+    if (email !== undefined) contact.email = email ? email.trim() : undefined;
+
+    await contact.save();
+
+    // אם סומן לסגור את הדיווח במקביל (שמור שינויים וסגור דיווח)
+    if (dismissReportId) {
+      const report = await Report.findByIdAndDelete(dismissReportId);
+      if (report) {
+        await Contact.findByIdAndUpdate(report.contactId, {
+          $pull: { reportedBy: report.reportedBy },
+          $inc: { reportCount: -1 },
+        });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: dismissReportId
+        ? 'פרטי איש הקשר עודכנו והדיווח נסגר בהצלחה'
+        : 'פרטי איש הקשר עודכנו בהצלחה',
+      data: contact,
     });
   } catch (error) {
     next(error);
