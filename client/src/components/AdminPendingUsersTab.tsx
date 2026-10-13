@@ -65,6 +65,7 @@ export function AdminPendingUsersTab() {
     try {
       await adminService.approveUser(id);
       setPendingUsers((prev) => prev.filter((u) => u._id !== id));
+      adminService.notifyCountsChanged();
       setSnackbarMsg(`המשתמש "${name}" אושר בהצלחה ויכול לגשת לאלפון!`);
       setSnackbarSeverity("success");
     } catch {
@@ -83,6 +84,7 @@ export function AdminPendingUsersTab() {
     try {
       await adminService.rejectUser(id);
       setPendingUsers((prev) => prev.filter((u) => u._id !== id));
+      adminService.notifyCountsChanged();
       setSnackbarMsg("בקשת המשתמש נדחתה בהצלחה");
       setSnackbarSeverity("success");
     } catch {

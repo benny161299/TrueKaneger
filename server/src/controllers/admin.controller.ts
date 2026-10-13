@@ -506,3 +506,39 @@ export const rejectUser = async (req: Request, res: Response, next: NextFunction
     next(error);
   }
 };
+
+/**
+ * שליפת ספירות התראות פעילות עבור ממשק הניהול (מנהל בלבד)
+ * מחזיר מספר משתמשים ממתינים, אנשי קשר ממתינים, ודיווחים פתוחים
+ */
+export const getAdminCounts = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [pendingUsers, pendingContacts, reports] = await Promise.all([
+      User.countDocuments({
+        role: { $ne: 'admin' },
+        $or: [
+          { approvalStatus: 'pending' },
+          { isApproved: { $ne: true }, approvalStatus: { $ne: 'rejected' } },
+        ],
+      }),
+      PendingContact.countDocuments(),
+      Report.countDocuments(),
+    ]);
+
+    const totalAlerts = pendingUsers + pendingContacts + reports;
+
+    res.status(200).json({
+      success: true,
+      message: 'ספירת התראות נשלפה בהצלחה',
+      data: {
+        pendingUsers,
+        pendingContacts,
+        reports,
+        totalAlerts,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

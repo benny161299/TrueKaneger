@@ -25,10 +25,14 @@ import {
   getPendingUsers,
   approveUser,
   rejectUser,
+  getAdminCounts,
 } from '../controllers/admin.controller.js';
 import { deleteContact } from '../controllers/contact.controller.js';
 
 const router = Router();
+
+// נתיב לשליפת ספירת התראות ודיווחים פעילים (מנהל בלבד, מוגן JWT)
+router.get('/counts', requireAuth, requireAdmin, getAdminCounts);
 
 // נתיב לקבלת רשימת הדיווחים המלאה (מנהל בלבד, מוגן JWT)
 router.get('/reports', requireAuth, requireAdmin, getReports);

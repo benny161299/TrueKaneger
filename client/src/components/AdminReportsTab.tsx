@@ -94,6 +94,7 @@ export function AdminReportsTab() {
     try {
       await adminService.dismissReport(reportToDismiss._id);
       setReports((prev) => prev.filter((r) => r._id !== reportToDismiss._id));
+      adminService.notifyCountsChanged();
       setSnackbarMsg("הדיווח נסגר בהצלחה");
       setReportToDismiss(null);
     } catch (err: any) {
@@ -186,6 +187,9 @@ export function AdminReportsTab() {
           : "פרטי איש הקשר עודכנו בהצלחה"
       );
       setFullEditTarget(null);
+      if (dismissReport) {
+        adminService.notifyCountsChanged();
+      }
       await fetchReports();
     } catch (err: any) {
       setEditFormError(err.response?.data?.message || err.message || "שגיאה בעדכון איש הקשר");

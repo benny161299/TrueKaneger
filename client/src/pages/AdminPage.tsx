@@ -12,7 +12,7 @@ import {
   Tabs,
   Typography,
 } from "@mui/material";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { AdminPendingUsersTab } from "../components/AdminPendingUsersTab";
 import { AdminPendingTab } from "../components/AdminPendingTab";
@@ -20,10 +20,35 @@ import { AdminReportsTab } from "../components/AdminReportsTab";
 import { AdminUsersTab } from "../components/AdminUsersTab";
 import { useAuth } from "../context/AuthContext";
 import { PageTitle, UnderlineBar } from "../styles/shared";
+import { adminService, type AdminCounts } from "../services/adminService";
 
 export function AdminPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
+  const [counts, setCounts] = useState<AdminCounts>({
+    pendingUsers: 0,
+    pendingContacts: 0,
+    reports: 0,
+    totalAlerts: 0,
+  });
+
+  const loadCounts = async () => {
+    try {
+      const data = await adminService.getCounts();
+      setCounts(data);
+    } catch {
+      // Ignore background fetch errors
+    }
+  };
+
+  useEffect(() => {
+    loadCounts();
+    const handleUpdate = () => loadCounts();
+    window.addEventListener("admin-counts-changed", handleUpdate);
+    return () => {
+      window.removeEventListener("admin-counts-changed", handleUpdate);
+    };
+  }, []);
 
   // Extra safety check in component
   if (!user || user.role !== "admin") {
@@ -74,19 +99,73 @@ export function AdminPage() {
           <Tab
             icon={<PersonAddIcon fontSize="small" />}
             iconPosition="start"
-            label="אישור משתמשים"
+            label={
+              <Box style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span>אישור משתמשים</span>
+                {counts.pendingUsers > 0 && (
+                  <Chip
+                    label={counts.pendingUsers}
+                    size="small"
+                    color="warning"
+                    style={{
+                      height: "20px",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      minWidth: "22px",
+                      padding: "0 2px",
+                    }}
+                  />
+                )}
+              </Box>
+            }
             style={{ fontWeight: 600, minHeight: "48px" }}
           />
           <Tab
             icon={<HourglassEmptyIcon fontSize="small" />}
             iconPosition="start"
-            label="אישור אנשי קשר"
+            label={
+              <Box style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span>אישור אנשי קשר</span>
+                {counts.pendingContacts > 0 && (
+                  <Chip
+                    label={counts.pendingContacts}
+                    size="small"
+                    color="info"
+                    style={{
+                      height: "20px",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      minWidth: "22px",
+                      padding: "0 2px",
+                    }}
+                  />
+                )}
+              </Box>
+            }
             style={{ fontWeight: 600, minHeight: "48px" }}
           />
           <Tab
             icon={<ReportProblemIcon fontSize="small" />}
             iconPosition="start"
-            label="דיווחים פתוחים"
+            label={
+              <Box style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span>דיווחים פתוחים</span>
+                {counts.reports > 0 && (
+                  <Chip
+                    label={counts.reports}
+                    size="small"
+                    color="error"
+                    style={{
+                      height: "20px",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      minWidth: "22px",
+                      padding: "0 2px",
+                    }}
+                  />
+                )}
+              </Box>
+            }
             style={{ fontWeight: 600, minHeight: "48px" }}
           />
           <Tab

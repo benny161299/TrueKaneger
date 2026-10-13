@@ -64,6 +64,7 @@ export function AdminPendingTab() {
     try {
       await adminService.approveContact(id);
       setPending((prev) => prev.filter((p) => p._id !== id));
+      adminService.notifyCountsChanged();
       setSnackbarSeverity("success");
       setSnackbarMsg("איש הקשר אושר ונוסף למאגר בהצלחה ✓");
     } catch {
@@ -82,6 +83,7 @@ export function AdminPendingTab() {
     try {
       await adminService.rejectContact(id);
       setPending((prev) => prev.filter((p) => p._id !== id));
+      adminService.notifyCountsChanged();
       setSnackbarSeverity("success");
       setSnackbarMsg("איש הקשר נדחה ונמחק");
     } catch {

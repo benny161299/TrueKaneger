@@ -158,6 +158,10 @@ export const setupMockDb = () => {
     return user;
   }) as any;
 
+  User.countDocuments = (async () => mockUsers.filter(u => u.approvalStatus === 'pending').length) as any;
+  (Report as any).countDocuments = (async () => 0) as any;
+  (PendingContact as any).countDocuments = (async () => 0) as any;
+
   // 3. Mock Contact model methods
   const mockContacts: any[] = [];
 

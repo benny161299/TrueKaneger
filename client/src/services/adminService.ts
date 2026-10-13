@@ -77,7 +77,23 @@ export interface PendingContactItem {
   updatedAt: string;
 }
 
+export interface AdminCounts {
+  pendingUsers: number;
+  pendingContacts: number;
+  reports: number;
+  totalAlerts: number;
+}
+
 export const adminService = {
+  async getCounts(): Promise<AdminCounts> {
+    const res = await api.get("/admin/counts");
+    return res.data.data;
+  },
+
+  notifyCountsChanged() {
+    window.dispatchEvent(new CustomEvent("admin-counts-changed"));
+  },
+
   async getReports(): Promise<AdminReportItem[]> {
     const res = await api.get("/admin/reports");
     return res.data.data;
