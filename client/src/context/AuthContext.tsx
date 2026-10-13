@@ -81,7 +81,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        // Try calling /auth/me to see if we have an active session (e.g. from active cookies or Google OAuth redirect)
+        // 1. בדיקה אם הגיעו אסימונים ב-URL מהפניית Google OAuth (עוקף חסימת עוגיות צד שלישי)
+        const searchParams = new URLSearchParams(window.location.search);
+        const accessTokenFromUrl = searchParams.get("accessToken");
+        const refreshTokenFromUrl = searchParams.get("refreshToken");
+
+        if (accessTokenFromUrl) {
+          localStorage.setItem("access_token", accessTokenFromUrl);
+          if (refreshTokenFromUrl) {
+            localStorage.setItem("refresh_token", refreshTokenFromUrl);
+          }
+
+          // ניקוי הטוקנים משורת הכתובות בדפדפן (אבטחה ונראות נקייה)
+          searchParams.delete("accessToken");
+          searchParams.delete("refreshToken");
+          const newSearch = searchParams.toString();
+          const cleanUrl =
+            window.location.pathname +
+            (newSearch ? `?${newSearch}` : "") +
+            window.location.hash;
+          window.history.replaceState({}, document.title, cleanUrl);
+        }
+
+        // 2. פנייה לשרת לשליפת המשתמש (נשלח ב-Bearer Token ובעוגיות במקביל)
         const response = await api.get("/auth/me");
         if (response.data?.success && response.data?.data?.user) {
           const userData = mapUserData(response.data.data.user);
@@ -91,9 +113,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           clearAuth();
         }
       } catch (error) {
-        // If /auth/me fails, try a silent token refresh as fallback
+        // אם /auth/me נכשל, ננסה רענון אסימון שקט (גם עם refreshToken מ-localStorage)
         try {
-          await api.post("/auth/refresh");
+          const storedRefreshToken = localStorage.getItem("refresh_token");
+          const refreshRes = await api.post("/auth/refresh", {
+            refreshToken: storedRefreshToken || undefined,
+          });
+
+          if (refreshRes.data?.data?.accessToken) {
+            localStorage.setItem("access_token", refreshRes.data.data.accessToken);
+          }
+          if (refreshRes.data?.data?.refreshToken) {
+            localStorage.setItem("refresh_token", refreshRes.data.data.refreshToken);
+          }
+
           const response = await api.get("/auth/me");
           if (response.data?.success && response.data?.data?.user) {
             const userData = mapUserData(response.data.data.user);
@@ -183,7 +216,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      await api.post("/auth/logout");
+      const storedRefreshToken = localStorage.getItem("refresh_token");
+      await api.post("/auth/logout", {
+        refreshToken: storedRefreshToken || undefined,
+      });
     } catch (error) {
       console.error("Logout error on server:", error);
     } finally {

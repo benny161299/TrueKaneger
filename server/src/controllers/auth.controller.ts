@@ -102,15 +102,17 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     }
     await user.save();
 
-    // 5. הגדרת עוגיות המזהה במענה
+    // 5. הגדרת עוגיות המזהה במענה (עבור דפדפנים שתומכים בעוגיות כרגיל)
     setTokenCookies(res, accessToken, refreshToken);
 
     // 6. החזרת תשובה במבנה ה-ApiResponse האחיד
-    // ⚠️ הטוקנים כבר הוגדרו ב-httpOnly cookies — לא מחזירים אותם ב-body כדי למנוע XSS
+    // בנוסף לעוגיות, מחזירים את הטוקנים בגוף התשובה כרשת ביטחון עבור דפדפנים שחוסמים עוגיות צד שלישי (iOS Safari, Incognito)
     res.status(200).json({
       success: true,
       message: 'התחברות בוצעה בהצלחה',
       data: {
+        accessToken,
+        refreshToken,
         user: {
           id: user._id,
           email: user.email,
@@ -229,11 +231,14 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
     // 7. עדכון עוגיות המזהה במענה
     setTokenCookies(res, newAccessToken, newRefreshToken);
 
-    // 8. החזרת תשובה במבנה ה-ApiResponse האחיד
-    // ⚠️ הטוקנים כבר הוגדרו ב-httpOnly cookies — לא מחזירים אותם ב-body
+    // 8. החזרת תשובה במבנה ה-ApiResponse האחיד כולל הטוקנים המעודכנים כרשת ביטחון
     res.status(200).json({
       success: true,
       message: 'אסימון הגישה חודש בהצלחה',
+      data: {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+      },
     });
   } catch (error) {
     res.status(401).json({
@@ -378,8 +383,11 @@ export const googleAuthCallback = async (req: Request, res: Response, next: Next
     // 7. הגדרת עוגיות המזהה במענה
     setTokenCookies(res, accessToken, refreshToken);
 
-    // 8. הפניה חזרה לפרונטנד
-    res.redirect(clientUrl);
+    // 8. הפניה חזרה לפרונטנד עם הטוקנים (מאפשר התחברות חלקה גם ללא עוגיות צד שלישי)
+    const redirectUrl = new URL(clientUrl);
+    redirectUrl.searchParams.set('accessToken', accessToken);
+    redirectUrl.searchParams.set('refreshToken', refreshToken);
+    res.redirect(redirectUrl.toString());
   } catch (error) {
     console.error('OAuth error:', error);
     res.redirect(`${clientUrl}/login?error=server_error`);
