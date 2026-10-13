@@ -1,8 +1,9 @@
 import type { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcrypt';
 import { User } from '../models/User.js'; // ⚡ תוקן ליבוא מסולסל תואם למודל שלך
-import type { RegisterInput, LoginInput } from 'shared'; // ודא שבשאר המונורפו השם הוא 'shared' ולא '@truekaneger/shared'
+import type { RegisterInput, LoginInput, CompleteProfileInput } from 'shared';
 import { generateAccessToken, generateRefreshToken, setTokenCookies, clearTokenCookies, verifyRefreshToken } from '../utils/jwt.js';
+import type { AuthenticatedRequest } from '../middlewares/auth.js';
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -114,6 +115,13 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
           id: user._id,
           email: user.email,
           role: user.role,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          phone: user.phone,
+          machzor: user.machzor,
+          approvalStatus: user.role === 'admin' ? 'approved' : (user.approvalStatus || (user.isApproved ? 'approved' : 'pending')),
+          isApproved: user.role === 'admin' ? true : !!user.isApproved,
+          isProfileComplete: Boolean(user.firstName && user.lastName && user.phone && user.machzor),
         },
       },
     });
@@ -307,8 +315,13 @@ export const googleAuthCallback = async (req: Request, res: Response, next: Next
       res.redirect(`${clientUrl}/login?error=google_userinfo_failed`);
       return;
     }
-
-    const userData = (await userinfoResponse.json()) as { id: string; email: string };
+    const userData = (await userinfoResponse.json()) as {
+      id: string;
+      email: string;
+      given_name?: string;
+      family_name?: string;
+      name?: string;
+    };
     const { id: googleId, email } = userData;
 
     // 4. חיפוש או יצירת המשתמש במסד הנתונים
@@ -319,17 +332,26 @@ export const googleAuthCallback = async (req: Request, res: Response, next: Next
       user = await User.findOne({ email });
       if (user) {
         user.googleId = googleId;
-        await user.save();
       } else {
         // יצירת משתמש חדש
         user = new User({
           email,
           googleId,
           role: 'user',
+          approvalStatus: 'pending',
+          isApproved: false,
         });
-        await user.save();
       }
     }
+
+    // שמירת שמות מראש מגוגל (כדי להקל על המשתמש בהשלמת הפרופיל)
+    if (!user.firstName && (userData.given_name || userData.name)) {
+      user.firstName = (userData.given_name || userData.name?.split(' ')[0] || '').trim();
+    }
+    if (!user.lastName && (userData.family_name || userData.name)) {
+      user.lastName = (userData.family_name || userData.name?.split(' ').slice(1).join(' ') || '').trim();
+    }
+    await user.save();
 
     // 5. בדיקה אם המשתמש חסום במערכת
     if (user.isBanned) {
@@ -363,8 +385,6 @@ export const googleAuthCallback = async (req: Request, res: Response, next: Next
     res.redirect(`${clientUrl}/login?error=server_error`);
   }
 };
-
-import type { AuthenticatedRequest } from '../middlewares/auth.js';
 
 export const getMe = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
@@ -401,6 +421,74 @@ export const getMe = async (req: AuthenticatedRequest, res: Response, next: Next
           id: user._id,
           email: user.email,
           role: user.role,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          phone: user.phone,
+          machzor: user.machzor,
+          approvalStatus: user.role === 'admin' ? 'approved' : (user.approvalStatus || (user.isApproved ? 'approved' : 'pending')),
+          isApproved: user.role === 'admin' ? true : !!user.isApproved,
+          isProfileComplete: Boolean(user.firstName && user.lastName && user.phone && user.machzor),
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * השלמת פרטי פרופיל (שם פרטי, שם משפחה, טלפון, מחזור) ושליחה לאישור מנהל
+ */
+export const completeProfile = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        message: 'גישה נדחתה. משתמש אינו מחובר',
+      });
+      return;
+    }
+
+    const { firstName, lastName, phone, machzor } = req.body as CompleteProfileInput;
+
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: 'המשתמש לא נמצא במערכת',
+      });
+      return;
+    }
+
+    // עדכון פרטי הפרופיל (אין שום גישה לשינוי role)
+    user.firstName = firstName.trim();
+    user.lastName = lastName.trim();
+    user.phone = phone.trim();
+    user.machzor = machzor.trim();
+
+    // מנהל תמיד מאושר, משתמש רגיל מוגדר בהמתנה
+    if (user.role !== 'admin' && !user.isApproved) {
+      user.approvalStatus = 'pending';
+      user.isApproved = false;
+    }
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'פרטי הפרופיל עודכנו בהצלחה ונשלחו לאישור מנהל',
+      data: {
+        user: {
+          id: user._id,
+          email: user.email,
+          role: user.role,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          phone: user.phone,
+          machzor: user.machzor,
+          approvalStatus: user.role === 'admin' ? 'approved' : user.approvalStatus,
+          isApproved: user.role === 'admin' ? true : !!user.isApproved,
+          isProfileComplete: true,
         },
       },
     });

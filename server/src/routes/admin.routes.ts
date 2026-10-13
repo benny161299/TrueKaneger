@@ -9,7 +9,21 @@ import {
 } from 'shared';
 import { requireAuth, requireAdmin } from '../middlewares/auth.js';
 import { validateRequest } from '../middlewares/validateRequest.js';
-import { getReports, dismissReport, toggleUserBan, getUsers, updateContactName, updateContactPhone, updateContactEmail, getPendingContacts, approveContact, rejectContact } from '../controllers/admin.controller.js';
+import {
+  getReports,
+  dismissReport,
+  toggleUserBan,
+  getUsers,
+  updateContactName,
+  updateContactPhone,
+  updateContactEmail,
+  getPendingContacts,
+  approveContact,
+  rejectContact,
+  getPendingUsers,
+  approveUser,
+  rejectUser,
+} from '../controllers/admin.controller.js';
 import { deleteContact } from '../controllers/contact.controller.js';
 
 const router = Router();
@@ -22,6 +36,15 @@ router.post('/reports/:id/dismiss', requireAuth, requireAdmin, validateRequest({
 
 // נתיב לקבלת רשימת כל המשתמשים (מנהל בלבד, מוגן JWT)
 router.get('/users', requireAuth, requireAdmin, getUsers);
+
+// נתיב לשליפת רשימת משתמשים ממתינים לאישור (מנהל בלבד, מוגן JWT)
+router.get('/pending-users', requireAuth, requireAdmin, getPendingUsers);
+
+// נתיב לאישור משתמש (מנהל בלבד, מוגן JWT)
+router.patch('/users/:id/approve', requireAuth, requireAdmin, validateRequest({ params: mongoIdParamSchema }), approveUser);
+
+// נתיב לדחיית משתמש (מנהל בלבד, מוגן JWT)
+router.patch('/users/:id/reject', requireAuth, requireAdmin, validateRequest({ params: mongoIdParamSchema }), rejectUser);
 
 // נתיב לחסימה/ביטול חסימה של משתמש (מנהל בלבד, מוגן JWT, ולידציית מזהה וגוף ב-Zod)
 router.patch('/users/:id/ban', requireAuth, requireAdmin, validateRequest({ params: mongoIdParamSchema, body: banUserSchema }), toggleUserBan);

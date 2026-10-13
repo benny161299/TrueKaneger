@@ -119,7 +119,10 @@ export const toggleUserBan = async (req: AuthenticatedRequest, res: Response, ne
 
 export const getUsers = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const users = await User.find({}, 'email role isBanned createdAt updatedAt');
+    const users = await User.find(
+      {},
+      'email role isBanned firstName lastName phone machzor isApproved approvalStatus createdAt updatedAt'
+    ).sort({ createdAt: -1 });
     res.status(200).json({
       success: true,
       message: 'רשימת המשתמשים נשלפה בהצלחה',
@@ -316,6 +319,112 @@ export const rejectContact = async (req: Request, res: Response, next: NextFunct
     res.status(200).json({
       success: true,
       message: 'איש הקשר נדחה ונמחק בהצלחה',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * שליפת רשימת כל המשתמשים הממתינים לאישור גישה לאלפון
+ */
+export const getPendingUsers = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // שליפת כל מי שאינו אדמין וממתין לאישור (או טרם אושר)
+    const pendingUsers = await User.find(
+      {
+        role: { $ne: 'admin' },
+        $or: [
+          { approvalStatus: 'pending' },
+          { isApproved: { $ne: true }, approvalStatus: { $ne: 'rejected' } },
+        ],
+      },
+      'email role isBanned firstName lastName phone machzor isApproved approvalStatus createdAt'
+    ).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      message: 'רשימת המשתמשים הממתינים נשלפה בהצלחה',
+      data: pendingUsers,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * אישור גישה למשתמש
+ */
+export const approveUser = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id);
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: 'המשתמש לא נמצא במערכת',
+      });
+      return;
+    }
+
+    user.isApproved = true;
+    user.approvalStatus = 'approved';
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: `המשתמש ${user.firstName ? user.firstName + ' ' + (user.lastName || '') : user.email} אושר בהצלחה`,
+      data: {
+        _id: user._id,
+        email: user.email,
+        role: user.role,
+        isApproved: user.isApproved,
+        approvalStatus: user.approvalStatus,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * דחיית בקשת גישה של משתמש
+ */
+export const rejectUser = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id);
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: 'המשתמש לא נמצא במערכת',
+      });
+      return;
+    }
+
+    // מניעת דחיית מנהל מערכת
+    if (user.role === 'admin') {
+      res.status(403).json({
+        success: false,
+        message: 'אין אפשרות לדחות מנהל מערכת',
+      });
+      return;
+    }
+
+    user.isApproved = false;
+    user.approvalStatus = 'rejected';
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: `בקשת הגישה של ${user.email} נדחתה`,
+      data: {
+        _id: user._id,
+        email: user.email,
+        role: user.role,
+        isApproved: user.isApproved,
+        approvalStatus: user.approvalStatus,
+      },
     });
   } catch (error) {
     next(error);

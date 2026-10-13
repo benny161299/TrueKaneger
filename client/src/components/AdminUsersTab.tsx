@@ -78,7 +78,15 @@ export function AdminUsersTab() {
   const filteredUsers = useMemo(() => {
     if (!searchQuery.trim()) return users;
     const q = searchQuery.trim().toLowerCase();
-    return users.filter((u) => u.email.toLowerCase().includes(q));
+    return users.filter((u) => {
+      const name = `${u.firstName || ""} ${u.lastName || ""}`.toLowerCase();
+      return (
+        u.email.toLowerCase().includes(q) ||
+        name.includes(q) ||
+        (u.phone && u.phone.includes(q)) ||
+        (u.machzor && u.machzor.toLowerCase().includes(q))
+      );
+    });
   }, [users, searchQuery]);
 
   const handleConfirmBanToggle = async () => {
@@ -384,8 +392,9 @@ export function AdminUsersTab() {
               <TableHead style={{ backgroundColor: "#f8fafc" }}>
                 <TableRow>
                   <TableCell style={{ fontWeight: 700, color: "#152d3b" }}>אימייל</TableCell>
+                  <TableCell style={{ fontWeight: 700, color: "#152d3b" }}>שם ומחזור</TableCell>
                   <TableCell style={{ fontWeight: 700, color: "#152d3b" }}>תפקיד</TableCell>
-                  <TableCell style={{ fontWeight: 700, color: "#152d3b" }}>סטטוס</TableCell>
+                  <TableCell style={{ fontWeight: 700, color: "#152d3b" }}>סטטוס הרשאה</TableCell>
                   <TableCell style={{ fontWeight: 700, color: "#152d3b" }}>תאריך הצטרפות</TableCell>
                   <TableCell align="left" style={{ fontWeight: 700, color: "#152d3b" }}>
                     פעולות
@@ -417,6 +426,26 @@ export function AdminUsersTab() {
                         </Box>
                       </TableCell>
 
+                      {/* Name & Machzor */}
+                      <TableCell>
+                        {u.firstName || u.lastName ? (
+                          <Box>
+                            <Typography variant="body2" style={{ fontWeight: 600, color: "#152d3b" }}>
+                              {`${u.firstName || ""} ${u.lastName || ""}`.trim()}
+                            </Typography>
+                            {u.machzor && (
+                              <Typography variant="caption" style={{ color: "#64748b" }}>
+                                מחזור {u.machzor} {u.phone ? `• ${u.phone}` : ""}
+                              </Typography>
+                            )}
+                          </Box>
+                        ) : (
+                          <Typography variant="caption" style={{ color: "#9ca3af" }}>
+                            טרם השלים פרטים
+                          </Typography>
+                        )}
+                      </TableCell>
+
                       {/* Role */}
                       <TableCell>
                         {u.role === "admin" ? (
@@ -439,24 +468,50 @@ export function AdminUsersTab() {
 
                       {/* Status */}
                       <TableCell>
-                        {u.isBanned ? (
-                          <Chip
-                            icon={<BlockIcon style={{ fontSize: "14px" }} />}
-                            label="חסום"
-                            size="small"
-                            color="error"
-                            style={{ fontWeight: 600 }}
-                          />
-                        ) : (
-                          <Chip
-                            icon={<CheckCircleIcon style={{ fontSize: "14px" }} />}
-                            label="פעיל"
-                            size="small"
-                            color="success"
-                            variant="outlined"
-                            style={{ fontWeight: 500 }}
-                          />
-                        )}
+                        <Box style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                          {u.isBanned ? (
+                            <Chip
+                              icon={<BlockIcon style={{ fontSize: "14px" }} />}
+                              label="חסום"
+                              size="small"
+                              color="error"
+                              style={{ fontWeight: 600 }}
+                            />
+                          ) : (
+                            <Chip
+                              icon={<CheckCircleIcon style={{ fontSize: "14px" }} />}
+                              label="פעיל"
+                              size="small"
+                              color="success"
+                              variant="outlined"
+                              style={{ fontWeight: 500 }}
+                            />
+                          )}
+
+                          {u.role !== "admin" && (
+                            u.isApproved ? (
+                              <Chip
+                                label="מאושר"
+                                size="small"
+                                color="success"
+                                style={{ fontWeight: 600 }}
+                              />
+                            ) : u.approvalStatus === "rejected" ? (
+                              <Chip
+                                label="נדחה"
+                                size="small"
+                                color="error"
+                                variant="outlined"
+                              />
+                            ) : (
+                              <Chip
+                                label="ממתין"
+                                size="small"
+                                color="warning"
+                              />
+                            )
+                          )}
+                        </Box>
                       </TableCell>
 
                       {/* CreatedAt */}

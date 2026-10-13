@@ -12,6 +12,13 @@ export interface User {
   id: string;
   email: string;
   role: "user" | "admin";
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  machzor?: string;
+  approvalStatus?: "pending" | "approved" | "rejected";
+  isApproved?: boolean;
+  isProfileComplete?: boolean;
 }
 
 interface AuthContextType {
@@ -20,9 +27,31 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  completeProfile: (data: {
+    firstName: string;
+    lastName: string;
+    phone: string;
+    machzor: string;
+  }) => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const mapUserData = (raw: any): User => ({
+  id: raw.id || raw._id,
+  email: raw.email,
+  role: raw.role,
+  firstName: raw.firstName,
+  lastName: raw.lastName,
+  phone: raw.phone,
+  machzor: raw.machzor,
+  approvalStatus: raw.role === "admin" ? "approved" : (raw.approvalStatus || (raw.isApproved ? "approved" : "pending")),
+  isApproved: raw.role === "admin" ? true : !!raw.isApproved,
+  isProfileComplete: raw.isProfileComplete !== undefined
+    ? raw.isProfileComplete
+    : Boolean(raw.firstName && raw.lastName && raw.phone && raw.machzor),
+});
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -36,17 +65,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("refresh_token");
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const response = await api.get("/auth/me");
+      if (response.data?.success && response.data?.data?.user) {
+        const userData = mapUserData(response.data.data.user);
+        setUser(userData);
+        localStorage.setItem("user_meta", JSON.stringify(userData));
+      }
+    } catch {
+      // silent fail on background refresh
+    }
+  }, []);
+
   useEffect(() => {
     const initializeAuth = async () => {
       try {
         // Try calling /auth/me to see if we have an active session (e.g. from active cookies or Google OAuth redirect)
         const response = await api.get("/auth/me");
         if (response.data?.success && response.data?.data?.user) {
-          const userData: User = {
-            id: response.data.data.user.id,
-            email: response.data.data.user.email,
-            role: response.data.data.user.role,
-          };
+          const userData = mapUserData(response.data.data.user);
           setUser(userData);
           localStorage.setItem("user_meta", JSON.stringify(userData));
         } else {
@@ -58,11 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await api.post("/auth/refresh");
           const response = await api.get("/auth/me");
           if (response.data?.success && response.data?.data?.user) {
-            const userData: User = {
-              id: response.data.data.user.id,
-              email: response.data.data.user.email,
-              role: response.data.data.user.role,
-            };
+            const userData = mapUserData(response.data.data.user);
             setUser(userData);
             localStorage.setItem("user_meta", JSON.stringify(userData));
           } else {
@@ -99,11 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (response.data.data.refreshToken) {
           localStorage.setItem("refresh_token", response.data.data.refreshToken);
         }
-        const userData: User = {
-          id: response.data.data.user.id,
-          email: response.data.data.user.email,
-          role: response.data.data.user.role,
-        };
+        const userData = mapUserData(response.data.data.user);
         setUser(userData);
         localStorage.setItem("user_meta", JSON.stringify(userData));
       } else {
@@ -129,6 +159,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const completeProfile = async (data: {
+    firstName: string;
+    lastName: string;
+    phone: string;
+    machzor: string;
+  }) => {
+    try {
+      const response = await api.post("/auth/complete-profile", data);
+      if (response.data?.success && response.data?.data?.user) {
+        const userData = mapUserData(response.data.data.user);
+        setUser(userData);
+        localStorage.setItem("user_meta", JSON.stringify(userData));
+      } else {
+        throw new Error(response.data?.message || "עדכון הפרטים נכשל");
+      }
+    } catch (error: any) {
+      const msg =
+        error.response?.data?.message || error.message || "עדכון הפרטים נכשל";
+      throw new Error(msg);
+    }
+  };
+
   const logout = async () => {
     try {
       await api.post("/auth/logout");
@@ -140,7 +192,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        register,
+        logout,
+        completeProfile,
+        refreshUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

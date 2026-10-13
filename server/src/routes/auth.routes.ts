@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { registerSchema, loginSchema } from 'shared';
+import { registerSchema, loginSchema, completeProfileSchema } from 'shared';
 import { validateRequest } from '../middlewares/validateRequest.js';
-import { register, login, logout, refresh, googleAuthRedirect, googleAuthCallback, getMe } from '../controllers/auth.controller.js';
+import { register, login, logout, refresh, googleAuthRedirect, googleAuthCallback, getMe, completeProfile } from '../controllers/auth.controller.js';
 import { requireAuth } from '../middlewares/auth.js';
 import { authRateLimiter, googleAuthRateLimiter } from '../middlewares/rateLimiter.js';
 
@@ -12,6 +12,7 @@ router.post('/register', authRateLimiter, validateRequest({ body: registerSchema
 router.post('/login', authRateLimiter, validateRequest({ body: loginSchema }), login);
 router.post('/logout', logout);
 router.post('/refresh', refresh);
+router.post('/complete-profile', requireAuth, validateRequest({ body: completeProfileSchema }), completeProfile);
 router.get('/google', googleAuthRedirect);
 router.get('/google/callback', googleAuthRateLimiter, googleAuthCallback);
 router.get('/me', requireAuth, getMe);

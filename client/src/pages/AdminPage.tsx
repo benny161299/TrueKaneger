@@ -2,6 +2,7 @@ import {
   AdminPanelSettings as AdminPanelSettingsIcon,
   HourglassEmpty as HourglassEmptyIcon,
   People as PeopleIcon,
+  PersonAdd as PersonAddIcon,
   ReportProblem as ReportProblemIcon,
 } from "@mui/icons-material";
 import {
@@ -13,6 +14,7 @@ import {
 } from "@mui/material";
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
+import { AdminPendingUsersTab } from "../components/AdminPendingUsersTab";
 import { AdminPendingTab } from "../components/AdminPendingTab";
 import { AdminReportsTab } from "../components/AdminReportsTab";
 import { AdminUsersTab } from "../components/AdminUsersTab";
@@ -55,7 +57,7 @@ export function AdminPage() {
       <UnderlineBar />
 
       <Typography variant="body2" style={{ color: "#4a6171", marginBottom: "20px" }}>
-        שלום, {user.email}! כאן תוכל לנהל דיווחים פתוחים על אנשי קשר, לאשר ממתינים ולנהל הרשאות משתמשים.
+        שלום, {user.email}! כאן תוכל לאשר משתמשים חדשים, לנהל דיווחים, לאשר אנשי קשר ולנהל הרשאות.
       </Typography>
 
       {/* Tabs navigation */}
@@ -70,9 +72,15 @@ export function AdminPage() {
           allowScrollButtonsMobile
         >
           <Tab
+            icon={<PersonAddIcon fontSize="small" />}
+            iconPosition="start"
+            label="אישור משתמשים"
+            style={{ fontWeight: 600, minHeight: "48px" }}
+          />
+          <Tab
             icon={<HourglassEmptyIcon fontSize="small" />}
             iconPosition="start"
-            label="ממתינים לאישור"
+            label="אישור אנשי קשר"
             style={{ fontWeight: 600, minHeight: "48px" }}
           />
           <Tab
@@ -84,20 +92,23 @@ export function AdminPage() {
           <Tab
             icon={<PeopleIcon fontSize="small" />}
             iconPosition="start"
-            label="ניהול משתמשים"
+            label="כל המשתמשים"
             style={{ fontWeight: 600, minHeight: "48px" }}
           />
         </Tabs>
       </Box>
 
-      {/* Tab 0: Pending contacts approval */}
-      {activeTab === 0 && <AdminPendingTab />}
+      {/* Tab 0: Pending users approval */}
+      {activeTab === 0 && <AdminPendingUsersTab />}
 
-      {/* Tab 1: Open Reports */}
-      {activeTab === 1 && <AdminReportsTab />}
+      {/* Tab 1: Pending contacts approval */}
+      {activeTab === 1 && <AdminPendingTab />}
 
-      {/* Tab 2: User Management */}
-      {activeTab === 2 && <AdminUsersTab />}
+      {/* Tab 2: Open Reports */}
+      {activeTab === 2 && <AdminReportsTab />}
+
+      {/* Tab 3: User Management */}
+      {activeTab === 3 && <AdminUsersTab />}
     </Box>
   );
 }

@@ -18,6 +18,10 @@ if (process.env.MOCK_DB === 'true') {
 // חיבור למסד הנתונים MongoDB Atlas
 await connectDB();
 
+// 🔒 מיגרציה בטוחה: וידוא אישור מנהלים והגדרת משתמשים קיימים ל-pending
+import { migrateUserApprovals } from './utils/migrateUsers.js';
+await migrateUserApprovals();
+
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1); // חובה עבור Render ופלטפורמות ענן לקבלת פרוטוקול HTTPS אמין ועוגיות מאובטחות

@@ -29,8 +29,28 @@ export interface AdminUserItem {
   email: string;
   role: "user" | "admin";
   isBanned: boolean;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  machzor?: string;
+  isApproved?: boolean;
+  approvalStatus?: "pending" | "approved" | "rejected";
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PendingUserItem {
+  _id: string;
+  email: string;
+  role: "user" | "admin";
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  machzor?: string;
+  isBanned?: boolean;
+  isApproved?: boolean;
+  approvalStatus?: "pending" | "approved" | "rejected";
+  createdAt: string;
 }
 
 export interface PendingContactItem {
@@ -94,5 +114,18 @@ export const adminService = {
 
   async rejectContact(pendingId: string): Promise<void> {
     await api.delete(`/admin/pending-contacts/${pendingId}/reject`);
+  },
+
+  async getPendingUsers(): Promise<PendingUserItem[]> {
+    const res = await api.get("/admin/pending-users");
+    return res.data.data;
+  },
+
+  async approveUser(userId: string): Promise<void> {
+    await api.patch(`/admin/users/${userId}/approve`);
+  },
+
+  async rejectUser(userId: string): Promise<void> {
+    await api.patch(`/admin/users/${userId}/reject`);
   },
 };

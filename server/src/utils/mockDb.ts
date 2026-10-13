@@ -78,25 +78,56 @@ export const setupMockDb = () => {
   }) as any;
 
   // Mock find
-  User.find = (async (query: any, projection: any) => {
-    return mockUsers.map(u => ({
-      _id: u._id,
-      email: u.email,
-      role: u.role || 'user',
-      isBanned: !!u.isBanned,
-      createdAt: u.createdAt || new Date(),
-      updatedAt: u.updatedAt || new Date(),
-      toObject: function() {
-        return {
-          _id: u._id,
-          email: u.email,
-          role: u.role || 'user',
-          isBanned: !!u.isBanned,
-          createdAt: u.createdAt || new Date(),
-          updatedAt: u.updatedAt || new Date(),
-        };
-      },
-    }));
+  User.find = ((query: any, projection: any) => {
+    const exec = async () => {
+      let filtered = mockUsers;
+      if (query) {
+        if (query.role && query.role.$ne) {
+          filtered = filtered.filter(u => u.role !== query.role.$ne);
+        }
+        if (query.approvalStatus) {
+          filtered = filtered.filter(u => u.approvalStatus === query.approvalStatus);
+        }
+      }
+
+      return filtered.map(u => ({
+        _id: u._id,
+        email: u.email,
+        role: u.role || 'user',
+        isBanned: !!u.isBanned,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        phone: u.phone,
+        machzor: u.machzor,
+        approvalStatus: u.role === 'admin' ? 'approved' : (u.approvalStatus || (u.isApproved ? 'approved' : 'pending')),
+        isApproved: u.role === 'admin' ? true : !!u.isApproved,
+        createdAt: u.createdAt || new Date(),
+        updatedAt: u.updatedAt || new Date(),
+        toObject: function() {
+          return {
+            _id: u._id,
+            email: u.email,
+            role: u.role || 'user',
+            isBanned: !!u.isBanned,
+            firstName: u.firstName,
+            lastName: u.lastName,
+            phone: u.phone,
+            machzor: u.machzor,
+            approvalStatus: u.role === 'admin' ? 'approved' : (u.approvalStatus || (u.isApproved ? 'approved' : 'pending')),
+            isApproved: u.role === 'admin' ? true : !!u.isApproved,
+            createdAt: u.createdAt || new Date(),
+            updatedAt: u.updatedAt || new Date(),
+          };
+        },
+      }));
+    };
+
+    const queryObj = {
+      sort: () => queryObj,
+      then: (onfulfilled?: any, onrejected?: any) => exec().then(onfulfilled, onrejected),
+      exec,
+    };
+    return queryObj;
   }) as any;
 
   User.findByIdAndUpdate = (async (id: any, update: any) => {

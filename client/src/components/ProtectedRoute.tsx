@@ -2,6 +2,7 @@ import { Box, CircularProgress } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { ApprovalGate } from "./ApprovalGate";
 
 const LoadingContainer = styled(Box)({
   display: "flex",
@@ -40,7 +41,7 @@ export function ProtectedRoute({
     return <Navigate to="/" replace />;
   }
 
-  return <>{children}</>;
+  return <ApprovalGate>{children}</ApprovalGate>;
 }
 
 export function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
