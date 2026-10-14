@@ -77,6 +77,11 @@ export const setupMockDb = () => {
     return { deletedCount: 0 };
   }) as any;
 
+  // Mock updateMany
+  User.updateMany = (async () => {
+    return { acknowledged: true, modifiedCount: 0 };
+  }) as any;
+
   // Mock find
   User.find = ((query: any, projection: any) => {
     const exec = async () => {
@@ -101,6 +106,7 @@ export const setupMockDb = () => {
         machzor: u.machzor,
         approvalStatus: u.role === 'admin' ? 'approved' : (u.approvalStatus || (u.isApproved ? 'approved' : 'pending')),
         isApproved: u.role === 'admin' ? true : !!u.isApproved,
+        reidentificationRequested: !!u.reidentificationRequested,
         createdAt: u.createdAt || new Date(),
         updatedAt: u.updatedAt || new Date(),
         toObject: function() {
@@ -115,6 +121,7 @@ export const setupMockDb = () => {
             machzor: u.machzor,
             approvalStatus: u.role === 'admin' ? 'approved' : (u.approvalStatus || (u.isApproved ? 'approved' : 'pending')),
             isApproved: u.role === 'admin' ? true : !!u.isApproved,
+            reidentificationRequested: !!u.reidentificationRequested,
             createdAt: u.createdAt || new Date(),
             updatedAt: u.updatedAt || new Date(),
           };
@@ -151,6 +158,11 @@ export const setupMockDb = () => {
     }
     if (update.$set) {
       Object.assign(user, update.$set);
+    }
+    if (update.$unset) {
+      for (const key of Object.keys(update.$unset)) {
+        delete (user as any)[key];
+      }
     }
     if (update.isBanned !== undefined) {
       user.isBanned = update.isBanned;

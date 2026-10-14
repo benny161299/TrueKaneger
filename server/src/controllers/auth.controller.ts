@@ -84,16 +84,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       return;
     }
 
-    // 3. בדיקה אם המשתמש חסום במערכת
-    if (user.isBanned) {
-      res.status(403).json({
-        success: false,
-        message: 'גישת משתמש זה נחסמה על ידי מנהל המערכת',
-      });
-      return;
-    }
-
-    // 4. יצירת Access Token ו-Refresh Token
+    // 3. יצירת Access Token ו-Refresh Token
     const accessToken = generateAccessToken({
       userId: user._id.toString(),
       role: user.role,
@@ -112,10 +103,10 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     user.markModified('refreshTokens');
     await user.save();
 
-    // 5. הגדרת עוגיות המזהה במענה (עבור דפדפנים שתומכים בעוגיות כרגיל)
+    // 4. הגדרת עוגיות המזהה במענה (עבור דפדפנים שתומכים בעוגיות כרגיל)
     setTokenCookies(res, accessToken, refreshToken);
 
-    // 6. החזרת תשובה במבנה ה-ApiResponse האחיד
+    // 5. החזרת תשובה במבנה ה-ApiResponse האחיד
     // בנוסף לעוגיות, מחזירים את הטוקנים בגוף התשובה כרשת ביטחון עבור דפדפנים שחוסמים עוגיות צד שלישי (iOS Safari, Incognito)
     res.status(200).json({
       success: true,
@@ -127,13 +118,15 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
           id: user._id,
           email: user.email,
           role: user.role,
+          isBanned: !!user.isBanned,
           firstName: user.firstName,
           lastName: user.lastName,
           phone: user.phone,
           machzor: user.machzor,
           approvalStatus: user.role === 'admin' ? 'approved' : (user.approvalStatus || (user.isApproved ? 'approved' : 'pending')),
           isApproved: user.role === 'admin' ? true : !!user.isApproved,
-          isProfileComplete: Boolean(user.firstName && user.lastName && user.phone && user.machzor),
+          isProfileComplete: Boolean(user.firstName && user.lastName && user.phone),
+          reidentificationRequested: !!user.reidentificationRequested,
         },
       },
     });
@@ -206,16 +199,7 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
       return;
     }
 
-    // 4. בדיקה אם המשתמש חסום במערכת
-    if (user.isBanned) {
-      res.status(403).json({
-        success: false,
-        message: 'גישת משתמש זה נחסמה על ידי מנהל המערכת',
-      });
-      return;
-    }
-
-    // 5. בדיקה קריטית: האם ה-refreshToken עדיין תקף ב-DB (כתוקף גלוי ישן או כ-Hash חדש)
+    // 4. בדיקה קריטית: האם ה-refreshToken עדיין תקף ב-DB (כתוקף גלוי ישן או כ-Hash חדש)
     const incomingTokenHash = hashToken(refreshToken);
     const tokenExists =
       user.refreshTokens &&
@@ -394,13 +378,7 @@ export const googleAuthCallback = async (req: Request, res: Response, next: Next
     }
     await user.save();
 
-    // 5. בדיקה אם המשתמש חסום במערכת
-    if (user.isBanned) {
-      res.redirect(`${clientUrl}/login?error=banned`);
-      return;
-    }
-
-    // 6. הנפקת אסימוני JWT של המערכת שלנו
+    // 5. הנפקת אסימוני JWT של המערכת שלנו
     const accessToken = generateAccessToken({
       userId: user._id.toString(),
       role: user.role,
@@ -450,14 +428,6 @@ export const getMe = async (req: AuthenticatedRequest, res: Response, next: Next
       return;
     }
 
-    if (user.isBanned) {
-      res.status(403).json({
-        success: false,
-        message: 'גישת משתמש זה נחסמה על ידי מנהל המערכת',
-      });
-      return;
-    }
-
     res.status(200).json({
       success: true,
       message: 'פרטי משתמש נשלפו בהצלחה',
@@ -466,13 +436,15 @@ export const getMe = async (req: AuthenticatedRequest, res: Response, next: Next
           id: user._id,
           email: user.email,
           role: user.role,
+          isBanned: !!user.isBanned,
           firstName: user.firstName,
           lastName: user.lastName,
           phone: user.phone,
           machzor: user.machzor,
           approvalStatus: user.role === 'admin' ? 'approved' : (user.approvalStatus || (user.isApproved ? 'approved' : 'pending')),
           isApproved: user.role === 'admin' ? true : !!user.isApproved,
-          isProfileComplete: Boolean(user.firstName && user.lastName && user.phone && user.machzor),
+          isProfileComplete: Boolean(user.firstName && user.lastName && user.phone),
+          reidentificationRequested: !!user.reidentificationRequested,
         },
       },
     });
@@ -509,13 +481,14 @@ export const completeProfile = async (req: AuthenticatedRequest, res: Response, 
     user.firstName = firstName.trim();
     user.lastName = lastName.trim();
     user.phone = phone.trim();
-    user.machzor = machzor.trim();
+    user.machzor = machzor && typeof machzor === 'string' && machzor.trim().length > 0 ? machzor.trim() : undefined;
 
     // מנהל תמיד מאושר, משתמש רגיל מוגדר בהמתנה
     if (user.role !== 'admin' && !user.isApproved) {
       user.approvalStatus = 'pending';
       user.isApproved = false;
     }
+    user.reidentificationRequested = false;
 
     await user.save();
 
@@ -534,6 +507,7 @@ export const completeProfile = async (req: AuthenticatedRequest, res: Response, 
           approvalStatus: user.role === 'admin' ? 'approved' : user.approvalStatus,
           isApproved: user.role === 'admin' ? true : !!user.isApproved,
           isProfileComplete: true,
+          reidentificationRequested: false,
         },
       },
     });

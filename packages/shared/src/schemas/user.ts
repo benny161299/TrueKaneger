@@ -18,7 +18,7 @@ export const completeProfileSchema = z.object({
   firstName: z.string().trim().min(2, 'שם פרטי חייב להכיל לפחות 2 תווים'),
   lastName: z.string().trim().min(2, 'שם משפחה חייב להכיל לפחות 2 תווים'),
   phone: z.string().trim().regex(/^05\d-?\d{7}$/, 'מספר טלפון סלולרי לא חוקי'),
-  machzor: z.string().trim().min(1, 'חובה להזין מחזור').max(30, 'מחזור ארוך מדי'),
+  machzor: z.string().trim().max(30, 'מחזור ארוך מדי').optional().or(z.literal('')),
 });
 
 export const approveUserSchema = z.object({

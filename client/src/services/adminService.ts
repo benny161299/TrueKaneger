@@ -55,6 +55,7 @@ export interface PendingUserItem {
   isBanned?: boolean;
   isApproved?: boolean;
   approvalStatus?: "pending" | "approved" | "rejected";
+  reidentificationRequested?: boolean;
   createdAt: string;
 }
 
@@ -165,5 +166,9 @@ export const adminService = {
 
   async rejectUser(userId: string): Promise<void> {
     await api.patch(`/admin/users/${userId}/reject`);
+  },
+
+  async requestUserDetails(userId: string): Promise<void> {
+    await api.patch(`/admin/users/${userId}/request-details`);
   },
 };

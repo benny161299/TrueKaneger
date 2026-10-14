@@ -6,7 +6,9 @@ import {
   Person as PersonIcon,
   Phone as PhoneIcon,
   Refresh as RefreshIcon,
+  RestartAlt as RestartAltIcon,
   School as SchoolIcon,
+  Search as SearchIcon,
 } from "@mui/icons-material";
 import {
   Alert,
@@ -23,10 +25,13 @@ import {
   DialogContentText,
   DialogTitle,
   Divider,
+  InputAdornment,
   Snackbar,
+  TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   adminService,
   type PendingUserItem,
@@ -39,8 +44,12 @@ export function AdminPendingUsersTab() {
   const [snackbarMsg, setSnackbarMsg] = useState<string | null>(null);
   const [snackbarSeverity, setSnackbarSeverity] = useState<"success" | "error">("success");
 
-  // Confirm reject dialog
-  const [rejectDialogId, setRejectDialogId] = useState<string | null>(null);
+  // Search filter
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Dialog targets
+  const [rejectUserTarget, setRejectUserTarget] = useState<PendingUserItem | null>(null);
+  const [reidentifyUserTarget, setReidentifyUserTarget] = useState<PendingUserItem | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const load = async () => {
@@ -60,6 +69,21 @@ export function AdminPendingUsersTab() {
     load();
   }, []);
 
+  const filteredPendingUsers = useMemo(() => {
+    if (!searchQuery.trim()) return pendingUsers;
+    const q = searchQuery.trim().toLowerCase();
+    return pendingUsers.filter((u) => {
+      const name = `${u.firstName || ""} ${u.lastName || ""}`.toLowerCase();
+      return (
+        u.email.toLowerCase().includes(q) ||
+        name.includes(q) ||
+        (u.phone && u.phone.includes(q)) ||
+        (u.machzor && u.machzor.toLowerCase().includes(q))
+      );
+    });
+  }, [pendingUsers, searchQuery]);
+
+  // 1. אשר (Approve)
   const handleApprove = async (id: string, name: string) => {
     setActionLoading(id);
     try {
@@ -76,16 +100,45 @@ export function AdminPendingUsersTab() {
     }
   };
 
-  const handleRejectConfirm = async () => {
-    if (!rejectDialogId) return;
-    const id = rejectDialogId;
-    setActionLoading(id);
-    setRejectDialogId(null);
+  // 2. בקש זיהוי פרטים מחדש (Request Re-identification)
+  const handleReidentifyConfirm = async () => {
+    if (!reidentifyUserTarget) return;
+    const target = reidentifyUserTarget;
+    const displayName =
+      target.firstName || target.lastName
+        ? `${target.firstName || ""} ${target.lastName || ""}`.trim()
+        : target.email;
+    setActionLoading(target._id);
+    setReidentifyUserTarget(null);
     try {
-      await adminService.rejectUser(id);
-      setPendingUsers((prev) => prev.filter((u) => u._id !== id));
+      await adminService.requestUserDetails(target._id);
+      setPendingUsers((prev) => prev.filter((u) => u._id !== target._id));
       adminService.notifyCountsChanged();
-      setSnackbarMsg("בקשת המשתמש נדחתה בהצלחה");
+      setSnackbarMsg(`נשלחה בקשה לזיהוי פרטים מחדש עבור "${displayName}". הפרטים אופסו בהצלחה והמשתמש הוחזר לסטטוס ממתין.`);
+      setSnackbarSeverity("success");
+    } catch {
+      setSnackbarMsg("שגיאה בבקשת זיהוי פרטים מחדש");
+      setSnackbarSeverity("error");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // 3. דחה לצמיתות (Permanently Reject)
+  const handleRejectConfirm = async () => {
+    if (!rejectUserTarget) return;
+    const target = rejectUserTarget;
+    const displayName =
+      target.firstName || target.lastName
+        ? `${target.firstName || ""} ${target.lastName || ""}`.trim()
+        : target.email;
+    setActionLoading(target._id);
+    setRejectUserTarget(null);
+    try {
+      await adminService.rejectUser(target._id);
+      setPendingUsers((prev) => prev.filter((u) => u._id !== target._id));
+      adminService.notifyCountsChanged();
+      setSnackbarMsg(`בקשת המשתמש "${displayName}" נדחתה לצמיתות.`);
       setSnackbarSeverity("success");
     } catch {
       setSnackbarMsg("שגיאה בדחיית המשתמש");
@@ -117,7 +170,7 @@ export function AdminPendingUsersTab() {
           justifyContent: "space-between",
           marginBottom: "16px",
           flexWrap: "wrap",
-          gap: "8px",
+          gap: "12px",
         }}
       >
         <Box style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -131,15 +184,43 @@ export function AdminPendingUsersTab() {
             style={{ fontWeight: 700 }}
           />
         </Box>
-        <Button
-          startIcon={<RefreshIcon />}
-          onClick={load}
-          variant="outlined"
-          size="small"
-          disabled={loading}
+
+        <Box
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            flex: "1 1 220px",
+            maxWidth: "380px",
+            width: "100%",
+          }}
         >
-          רענן
-        </Button>
+          <TextField
+            size="small"
+            placeholder="חיפוש לפי שם, אימייל, טלפון או מחזור..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            fullWidth
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" style={{ color: "#73787c" }} />
+                </InputAdornment>
+              ),
+            }}
+            style={{ backgroundColor: "#ffffff" }}
+          />
+          <Button
+            startIcon={<RefreshIcon />}
+            onClick={load}
+            variant="outlined"
+            size="small"
+            disabled={loading}
+            style={{ minWidth: "80px", whiteSpace: "nowrap" }}
+          >
+            רענן
+          </Button>
+        </Box>
       </Box>
 
       {error && (
@@ -175,7 +256,32 @@ export function AdminPendingUsersTab() {
         </Box>
       )}
 
-      {!loading && pendingUsers.length > 0 && (
+      {!loading && pendingUsers.length > 0 && filteredPendingUsers.length === 0 && (
+        <Box
+          style={{
+            textAlign: "center",
+            padding: "40px 16px",
+            color: "#6b7280",
+            backgroundColor: "#ffffff",
+            borderRadius: "10px",
+            border: "1px dashed #d1d5db",
+          }}
+        >
+          <Typography variant="body1" style={{ fontWeight: 600 }}>
+            לא נמצאו משתמשים ממתינים התואמים לחיפוש "{searchQuery}"
+          </Typography>
+          <Button
+            variant="text"
+            size="small"
+            onClick={() => setSearchQuery("")}
+            sx={{ mt: 1 }}
+          >
+            נקה חיפוש
+          </Button>
+        </Box>
+      )}
+
+      {!loading && filteredPendingUsers.length > 0 && (
         <Box
           style={{
             display: "grid",
@@ -183,12 +289,13 @@ export function AdminPendingUsersTab() {
             gap: "16px",
           }}
         >
-          {pendingUsers.map((item) => {
+          {filteredPendingUsers.map((item) => {
             const displayName =
               item.firstName || item.lastName
                 ? `${item.firstName || ""} ${item.lastName || ""}`.trim()
                 : "משתמש ללא שם מלא";
             const isProcessing = actionLoading === item._id;
+            const hasDetails = Boolean(item.firstName || item.lastName || item.phone || item.machzor);
 
             return (
               <Card
@@ -229,9 +336,17 @@ export function AdminPendingUsersTab() {
                         variant="outlined"
                         style={{ fontWeight: 600 }}
                       />
+                    ) : item.reidentificationRequested ? (
+                      <Chip
+                        label="ממתין לזיהוי מחדש"
+                        size="small"
+                        color="warning"
+                        variant="outlined"
+                        style={{ fontSize: "11px", fontWeight: 600 }}
+                      />
                     ) : (
                       <Chip
-                        label="טרם השלים פרטים"
+                        label="מחזור לא ידוע"
                         size="small"
                         color="default"
                         variant="outlined"
@@ -282,39 +397,71 @@ export function AdminPendingUsersTab() {
                   </Box>
                 </CardContent>
 
-                {/* Actions */}
+                {/* 3 Actions: אשר, בקש זיהוי פרטים מחדש, דחה לצמיתות */}
                 <CardActions
                   style={{
-                    padding: "8px 16px 16px",
+                    padding: "12px 16px 16px",
                     display: "flex",
-                    justifyContent: "space-between",
+                    flexDirection: "column",
+                    gap: "8px",
                     borderTop: "1px solid #f3f4f6",
                   }}
                 >
+                  {/* Option 2: אשר (Approve) */}
                   <Button
                     variant="contained"
                     color="success"
                     size="small"
+                    fullWidth
                     startIcon={
                       isProcessing ? <CircularProgress size={16} color="inherit" /> : <CheckIcon />
                     }
                     disabled={isProcessing}
                     onClick={() => handleApprove(item._id, displayName)}
-                    style={{ fontWeight: 600, minWidth: "110px" }}
+                    style={{ fontWeight: 700, height: "36px" }}
                   >
-                    אשר גישה
+                    אשר
                   </Button>
 
+                  {/* Option 1: בקש זיהוי פרטים מחדש (Request Re-identification) */}
+                  <Tooltip
+                    title={!hasDetails ? "המשתמש טרם הזין פרטים" : ""}
+                    placement="top"
+                    arrow
+                  >
+                    <Box component="span" style={{ width: "100%" }}>
+                      <Button
+                        variant="outlined"
+                        color="warning"
+                        size="small"
+                        fullWidth
+                        startIcon={<RestartAltIcon />}
+                        disabled={isProcessing || !hasDetails}
+                        onClick={() => setReidentifyUserTarget(item)}
+                        style={{
+                          fontWeight: 600,
+                          height: "34px",
+                          borderColor: !hasDetails ? undefined : "#f59e0b",
+                          color: !hasDetails ? undefined : "#b45309",
+                        }}
+                      >
+                        בקש זיהוי פרטים מחדש
+                      </Button>
+                    </Box>
+                  </Tooltip>
+
+                  {/* Option 3: דחה לצמיתות (Permanently Reject) */}
                   <Button
                     variant="outlined"
                     color="error"
                     size="small"
+                    fullWidth
                     startIcon={<CloseIcon />}
                     disabled={isProcessing}
-                    onClick={() => setRejectDialogId(item._id)}
-                    style={{ fontWeight: 600 }}
+                    onClick={() => setRejectUserTarget(item)}
+                    style={{ fontWeight: 600, height: "34px" }}
                   >
-                    דחה
+                    דחה לצמיתות
                   </Button>
                 </CardActions>
               </Card>
@@ -323,29 +470,81 @@ export function AdminPendingUsersTab() {
         </Box>
       )}
 
+      {/* Re-identification Confirmation Dialog */}
+      <Dialog
+        open={Boolean(reidentifyUserTarget)}
+        onClose={() => setReidentifyUserTarget(null)}
+        PaperProps={{ style: { borderRadius: "12px", maxWidth: "460px" } }}
+      >
+        <DialogTitle style={{ fontWeight: 700, color: "#b45309", display: "flex", alignItems: "center", gap: "8px" }}>
+          <RestartAltIcon />
+          בקשת זיהוי פרטים מחדש
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText style={{ color: "#374151", marginBottom: "12px" }}>
+            האם אתה בטוח שברצונך לבקש ממשתמש זה (
+            <strong>
+              {reidentifyUserTarget?.firstName || reidentifyUserTarget?.lastName
+                ? `${reidentifyUserTarget.firstName || ""} ${reidentifyUserTarget.lastName || ""}`.trim()
+                : reidentifyUserTarget?.email}
+            </strong>
+            ) להזין את פרטי הזיהוי מחדש?
+          </DialogContentText>
+          <Alert severity="warning" style={{ fontSize: "0.85rem", lineHeight: 1.5 }}>
+            הפרטים שהמשתמש הזין (שם, טלפון, מחזור) יאופסו לחלוטין והמשתמש יוחזר לסטטוס ממתין.
+            בהתחברותו הבאה יוצג לו מסך השלמת הפרטים מחדש.
+          </Alert>
+        </DialogContent>
+        <DialogActions style={{ padding: "12px 24px 16px" }}>
+          <Button onClick={() => setReidentifyUserTarget(null)} color="inherit">
+            ביטול
+          </Button>
+          <Button
+            onClick={handleReidentifyConfirm}
+            color="warning"
+            variant="contained"
+            style={{ fontWeight: 700 }}
+          >
+            אישור ואיפוס פרטים
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Reject Confirmation Dialog */}
       <Dialog
-        open={Boolean(rejectDialogId)}
-        onClose={() => setRejectDialogId(null)}
-        PaperProps={{ style: { borderRadius: "10px" } }}
+        open={Boolean(rejectUserTarget)}
+        onClose={() => setRejectUserTarget(null)}
+        PaperProps={{ style: { borderRadius: "12px", maxWidth: "460px" } }}
       >
-        <DialogTitle style={{ fontWeight: 700 }}>דחיית בקשת גישה</DialogTitle>
+        <DialogTitle style={{ fontWeight: 700, color: "#dc2626", display: "flex", alignItems: "center", gap: "8px" }}>
+          <CloseIcon />
+          דחיית משתמש לצמיתות
+        </DialogTitle>
         <DialogContent>
-          <DialogContentText>
-            האם אתה בטוח שברצונך לדחות את בקשת הגישה של משתמש זה? המשתמש לא יוכל לצפות באלפון.
+          <DialogContentText style={{ color: "#374151", marginBottom: "12px" }}>
+            האם אתה בטוח שברצונך לדחות לצמיתות את בקשת הגישה של{" "}
+            <strong>
+              {rejectUserTarget?.firstName || rejectUserTarget?.lastName
+                ? `${rejectUserTarget.firstName || ""} ${rejectUserTarget.lastName || ""}`.trim()
+                : rejectUserTarget?.email}
+            </strong>
+            ?
           </DialogContentText>
+          <Alert severity="error" style={{ fontSize: "0.85rem", lineHeight: 1.5 }}>
+            המשתמש יידחה לצמיתות ולא תתאפשר לו גישה לאלפון.
+          </Alert>
         </DialogContent>
-        <DialogActions style={{ padding: "16px 24px" }}>
-          <Button onClick={() => setRejectDialogId(null)} color="inherit">
+        <DialogActions style={{ padding: "12px 24px 16px" }}>
+          <Button onClick={() => setRejectUserTarget(null)} color="inherit">
             ביטול
           </Button>
           <Button
             onClick={handleRejectConfirm}
             color="error"
             variant="contained"
-            style={{ fontWeight: 600 }}
+            style={{ fontWeight: 700 }}
           >
-            אישור דחייה
+            דחה לצמיתות
           </Button>
         </DialogActions>
       </Dialog>

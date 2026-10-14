@@ -12,6 +12,7 @@ export interface User {
   id: string;
   email: string;
   role: "user" | "admin";
+  isBanned?: boolean;
   firstName?: string;
   lastName?: string;
   phone?: string;
@@ -19,6 +20,7 @@ export interface User {
   approvalStatus?: "pending" | "approved" | "rejected";
   isApproved?: boolean;
   isProfileComplete?: boolean;
+  reidentificationRequested?: boolean;
 }
 
 interface AuthContextType {
@@ -31,7 +33,7 @@ interface AuthContextType {
     firstName: string;
     lastName: string;
     phone: string;
-    machzor: string;
+    machzor?: string;
   }) => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -42,6 +44,7 @@ const mapUserData = (raw: any): User => ({
   id: raw.id || raw._id,
   email: raw.email,
   role: raw.role,
+  isBanned: !!raw.isBanned,
   firstName: raw.firstName,
   lastName: raw.lastName,
   phone: raw.phone,
@@ -50,7 +53,8 @@ const mapUserData = (raw: any): User => ({
   isApproved: raw.role === "admin" ? true : !!raw.isApproved,
   isProfileComplete: raw.isProfileComplete !== undefined
     ? raw.isProfileComplete
-    : Boolean(raw.firstName && raw.lastName && raw.phone && raw.machzor),
+    : Boolean(raw.firstName && raw.lastName && raw.phone),
+  reidentificationRequested: !!raw.reidentificationRequested,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -196,7 +200,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     firstName: string;
     lastName: string;
     phone: string;
-    machzor: string;
+    machzor?: string;
   }) => {
     try {
       const response = await api.post("/auth/complete-profile", data);

@@ -2,9 +2,12 @@ import {
   AdminPanelSettings as AdminPanelSettingsIcon,
   Block as BlockIcon,
   CheckCircle as CheckCircleIcon,
+  Email as EmailIcon,
   LockOpen as LockOpenIcon,
   Person as PersonIcon,
+  Phone as PhoneIcon,
   Refresh as RefreshIcon,
+  School as SchoolIcon,
   Search as SearchIcon,
 } from "@mui/icons-material";
 import {
@@ -101,10 +104,16 @@ export function AdminUsersTab() {
       setUsers((prev) =>
         prev.map((u) =>
           u._id === targetUserForBan.user._id
-            ? { ...u, isBanned: targetUserForBan.newBannedStatus }
+            ? {
+                ...u,
+                isBanned: targetUserForBan.newBannedStatus,
+                approvalStatus: targetUserForBan.newBannedStatus ? "rejected" : "pending",
+              }
             : u,
         ),
       );
+
+      adminService.notifyCountsChanged();
 
       setSnackbarMsg(
         targetUserForBan.newBannedStatus
@@ -171,7 +180,7 @@ export function AdminUsersTab() {
         >
           <TextField
             size="small"
-            placeholder="חיפוש לפי אימייל..."
+            placeholder="חיפוש לפי שם, אימייל, טלפון או מחזור..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             fullWidth
@@ -243,94 +252,194 @@ export function AdminUsersTab() {
         </Box>
       ) : (
         <>
-          {/* Mobile Card View (< md) - מותאם למובייל ללא גלילה אופקית */}
+          {/* Mobile Card View (< md) - מותאם למובייל עם כל פרטי המשתמש */}
           <Box sx={{ display: { xs: "flex", md: "none" }, flexDirection: "column", gap: "12px" }}>
             {filteredUsers.map((u) => {
               const isSelf = currentAdmin?.email === u.email;
+              const fullName =
+                u.firstName || u.lastName
+                  ? `${u.firstName || ""} ${u.lastName || ""}`.trim()
+                  : null;
 
               return (
                 <Card
                   key={u._id}
                   variant="outlined"
                   sx={{
-                    borderRadius: "10px",
+                    borderRadius: "12px",
                     borderColor: "#d0d7de",
                     backgroundColor: "#ffffff",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
                   }}
                 >
                   <CardContent sx={{ padding: "14px 14px 10px !important" }}>
-                    {/* Header: User icon, email, "אתה" chip */}
-                    <Box style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", flexWrap: "wrap", marginBottom: "8px" }}>
-                      <Box style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, flex: 1 }}>
-                        <PersonIcon fontSize="small" style={{ color: "#73787c", flexShrink: 0 }} />
+                    {/* Header: Full Name or Placeholder, Machzor Chip, and 'אתה' */}
+                    <Box
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        justifyContent: "space-between",
+                        gap: "8px",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      <Box style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                        <PersonIcon style={{ color: "#152d3b", fontSize: "22px", flexShrink: 0 }} />
+                        <Box>
+                          <Typography
+                            variant="subtitle1"
+                            style={{
+                              fontWeight: 700,
+                              color: fullName ? "#152d3b" : "#64748b",
+                              lineHeight: 1.2,
+                            }}
+                          >
+                            {fullName || "משתמש ללא שם מלא"}
+                          </Typography>
+                          {isSelf && (
+                            <Chip
+                              label="אתה"
+                              size="small"
+                              color="info"
+                              style={{ height: "18px", fontSize: "10px", marginTop: "4px" }}
+                            />
+                          )}
+                        </Box>
+                      </Box>
+
+                      {/* Machzor Chip */}
+                      {u.machzor ? (
+                        <Chip
+                          icon={<SchoolIcon style={{ fontSize: "15px" }} />}
+                          label={u.machzor.includes("לא זוכר") ? u.machzor : `מחזור ${u.machzor}`}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                          style={{ fontWeight: 600, flexShrink: 0 }}
+                        />
+                      ) : (
+                        <Chip
+                          label="מחזור לא ידוע"
+                          size="small"
+                          variant="outlined"
+                          style={{ fontSize: "11px", color: "#94a3b8", flexShrink: 0 }}
+                        />
+                      )}
+                    </Box>
+
+                    {/* Details Box: Email & Phone */}
+                    <Box
+                      sx={{
+                        backgroundColor: "#f8fafc",
+                        p: 1.25,
+                        borderRadius: "8px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                        mb: 1.25,
+                      }}
+                    >
+                      {/* Email */}
+                      <Box style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
+                        <EmailIcon fontSize="small" style={{ color: "#64748b", fontSize: "17px", flexShrink: 0 }} />
                         <Typography
                           variant="body2"
                           style={{
-                            fontWeight: 700,
-                            color: "#152d3b",
+                            color: "#334155",
+                            direction: "ltr",
+                            textAlign: "right",
+                            fontSize: "0.85rem",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
-                            direction: "ltr",
-                            textAlign: "right",
                           }}
                         >
                           {u.email}
                         </Typography>
                       </Box>
-                      {isSelf && (
-                        <Chip
-                          label="אתה"
-                          size="small"
-                          color="info"
-                          style={{ height: "20px", fontSize: "11px", flexShrink: 0 }}
-                        />
+
+                      {/* Phone */}
+                      {u.phone ? (
+                        <Box style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <PhoneIcon fontSize="small" style={{ color: "#2563eb", fontSize: "17px", flexShrink: 0 }} />
+                          <Typography
+                            variant="body2"
+                            dir="ltr"
+                            component="a"
+                            href={`tel:${u.phone}`}
+                            style={{
+                              color: "#2563eb",
+                              textDecoration: "none",
+                              fontWeight: 600,
+                              fontSize: "0.85rem",
+                            }}
+                          >
+                            {u.phone}
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <Box style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <PhoneIcon fontSize="small" style={{ color: "#cbd5e1", fontSize: "17px", flexShrink: 0 }} />
+                          <Typography variant="caption" style={{ color: "#94a3b8" }}>
+                            לא הוזן מספר טלפון
+                          </Typography>
+                        </Box>
                       )}
                     </Box>
 
-                    {/* Badges: Role and Status */}
-                    <Box style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "8px" }}>
-                      {u.role === "admin" ? (
-                        <Chip
-                          icon={<AdminPanelSettingsIcon style={{ fontSize: "14px" }} />}
-                          label="מנהל"
-                          size="small"
-                          color="error"
-                          style={{ fontWeight: 600, height: "24px" }}
-                        />
-                      ) : (
-                        <Chip
-                          label="משתמש"
-                          size="small"
-                          variant="outlined"
-                          style={{ fontWeight: 500, height: "24px" }}
-                        />
-                      )}
+                    {/* Badges: Role and Status & Join Date */}
+                    <Box
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: "6px",
+                      }}
+                    >
+                      <Box style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                        {u.role === "admin" ? (
+                          <Chip
+                            icon={<AdminPanelSettingsIcon style={{ fontSize: "14px" }} />}
+                            label="מנהל"
+                            size="small"
+                            color="error"
+                            style={{ fontWeight: 600, height: "24px" }}
+                          />
+                        ) : (
+                          <Chip
+                            label="משתמש"
+                            size="small"
+                            variant="outlined"
+                            style={{ fontWeight: 500, height: "24px" }}
+                          />
+                        )}
 
-                      {u.isBanned ? (
-                        <Chip
-                          icon={<BlockIcon style={{ fontSize: "13px" }} />}
-                          label="חסום"
-                          size="small"
-                          color="error"
-                          style={{ fontWeight: 600, height: "24px" }}
-                        />
-                      ) : (
-                        <Chip
-                          icon={<CheckCircleIcon style={{ fontSize: "13px" }} />}
-                          label="פעיל"
-                          size="small"
-                          color="success"
-                          variant="outlined"
-                          style={{ fontWeight: 500, height: "24px" }}
-                        />
-                      )}
+                        {u.isBanned ? (
+                          <Chip
+                            icon={<BlockIcon style={{ fontSize: "13px" }} />}
+                            label="חסום"
+                            size="small"
+                            color="error"
+                            style={{ fontWeight: 600, height: "24px" }}
+                          />
+                        ) : (
+                          <Chip
+                            icon={<CheckCircleIcon style={{ fontSize: "13px" }} />}
+                            label="פעיל"
+                            size="small"
+                            color="success"
+                            variant="outlined"
+                            style={{ fontWeight: 500, height: "24px" }}
+                          />
+                        )}
+                      </Box>
+
+                      {/* Join Date */}
+                      <Typography variant="caption" style={{ color: "#73787c" }}>
+                        הצטרף/ה: {formatDate(u.createdAt)}
+                      </Typography>
                     </Box>
-
-                    {/* Join Date */}
-                    <Typography variant="caption" style={{ color: "#73787c", display: "block" }}>
-                      הצטרף/ה: {formatDate(u.createdAt)}
-                    </Typography>
                   </CardContent>
 
                   {/* Actions */}
@@ -433,11 +542,9 @@ export function AdminUsersTab() {
                             <Typography variant="body2" style={{ fontWeight: 600, color: "#152d3b" }}>
                               {`${u.firstName || ""} ${u.lastName || ""}`.trim()}
                             </Typography>
-                            {u.machzor && (
-                              <Typography variant="caption" style={{ color: "#64748b" }}>
-                                מחזור {u.machzor} {u.phone ? `• ${u.phone}` : ""}
-                              </Typography>
-                            )}
+                            <Typography variant="caption" style={{ color: "#64748b" }}>
+                              {u.machzor ? `מחזור ${u.machzor}` : "מחזור לא ידוע"} {u.phone ? `• ${u.phone}` : ""}
+                            </Typography>
                           </Box>
                         ) : (
                           <Typography variant="caption" style={{ color: "#9ca3af" }}>

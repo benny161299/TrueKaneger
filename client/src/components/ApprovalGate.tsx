@@ -28,22 +28,22 @@ export function ApprovalGate({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  // משתמש מאושר נכנס חופשי
+  // 1. מקרה חסימה או דחייה ע"י מנהל המערכת (שתי החסימות מאוחדות לאותו מסך)
+  if (user?.isBanned || user?.approvalStatus === "rejected") {
+    return <RejectedView />;
+  }
+
+  // 2. משתמש מאושר נכנס חופשי
   if (user?.isApproved) {
     return <>{children}</>;
   }
 
-  // 1. מקרה ראשון: חסרים פרטי פרופיל (שם, טלפון או מחזור)
+  // 3. חסרים פרטי פרופיל (שם, טלפון או מחזור)
   if (!user?.isProfileComplete) {
     return <CompleteProfileView />;
   }
 
-  // 2. מקרה שני: המשתמש נדחה ע"י האדמין
-  if (user?.approvalStatus === "rejected") {
-    return <RejectedView />;
-  }
-
-  // 3. מקרה שלישי: פרטי הפרופיל מלאים, אך המשתמש ממתין לאישור מנהל
+  // 4. פרטי הפרופיל מלאים, אך המשתמש ממתין לאישור מנהל
   return <PendingApprovalView />;
 }
 
@@ -77,10 +77,7 @@ function CompleteProfileView() {
       setErrorMsg("מספר טלפון סלולרי לא חוקי (חייב להתחיל ב-05 ולהכיל 10 ספרות)");
       return;
     }
-    if (!machzor.trim()) {
-      setErrorMsg('חובה להזין מחזור (אם אינך זוכר, ניתן לכתוב "לא זוכר")');
-      return;
-    }
+    const cleanMachzor = machzor.trim();
 
     setLoading(true);
     try {
@@ -88,7 +85,7 @@ function CompleteProfileView() {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         phone: cleanPhone,
-        machzor: machzor.trim(),
+        machzor: cleanMachzor ? cleanMachzor : undefined,
       });
     } catch (err: any) {
       setErrorMsg(err.message || "שמירת הפרטים נכשלה. נסה שוב.");
@@ -140,6 +137,12 @@ function CompleteProfileView() {
             </Typography>
           </Box>
 
+          {user?.reidentificationRequested && (
+            <Alert severity="warning" sx={{ mb: 2.5, fontWeight: 600, textAlign: "right" }}>
+              לא סיפקת מספיק פרטים, לא הצלחנו לזהות אותך. אנא הכנס פרטים מחדש.
+            </Alert>
+          )}
+
           {errorMsg && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {errorMsg}
@@ -180,14 +183,13 @@ function CompleteProfileView() {
               />
 
               <TextField
-                label="מחזור"
-                placeholder='לדוגמה: כ"ח (או "לא זוכר")'
-                helperText='אם אינך זוכר את המחזור, ניתן לכתוב "לא זוכר"'
+                label="מחזור (אופציונלי)"
+                placeholder='לדוגמה: כ"ח'
+                helperText="לא חובה - אם אינך בטוח תוכל להשאיר ריק"
                 value={machzor}
                 onChange={(e) => setMachzor(e.target.value)}
                 fullWidth
                 size="small"
-                required
               />
 
               <Button
@@ -299,7 +301,7 @@ function PendingApprovalView() {
               {user?.firstName} {user?.lastName}
               {user?.machzor
                 ? ` (${user.machzor.includes("לא זוכר") ? user.machzor : `מחזור ${user.machzor}`})`
-                : ""}
+                : " (מחזור לא ידוע)"}
             </Typography>
             {user?.phone && (
               <Typography variant="body2" sx={{ color: "#475569" }} dir="ltr">
@@ -380,11 +382,11 @@ function RejectedView() {
           </Box>
 
           <Typography variant="h5" sx={{ fontWeight: 700, color: "#991b1b", mb: 1 }}>
-            בקשת הגישה לא אושרה
+            חשבונך לא אושר או נחסם
           </Typography>
 
           <Typography variant="body2" sx={{ color: "#64748b", mb: 3 }}>
-            מנהל המערכת לא אישר את בקשת הגישה לחשבון זה. לפניות ושאלות אנא פנה למנהל המערכת.
+            מנהל המערכת לא אישר את בקשת הגישה לחשבון זה או שחשבונך נחסם. לפניות ושאלות אנא פנה למנהל המערכת.
           </Typography>
 
           <Button

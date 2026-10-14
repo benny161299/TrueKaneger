@@ -105,6 +105,13 @@ export const toggleUserBan = async (req: AuthenticatedRequest, res: Response, ne
     }
 
     user.isBanned = isBanned;
+    if (isBanned) {
+      user.isApproved = false;
+      user.approvalStatus = 'rejected';
+    } else {
+      user.isApproved = false;
+      user.approvalStatus = 'pending';
+    }
     await user.save();
 
     res.status(200).json({
@@ -115,6 +122,8 @@ export const toggleUserBan = async (req: AuthenticatedRequest, res: Response, ne
         email: user.email,
         role: user.role,
         isBanned: user.isBanned,
+        isApproved: user.isApproved,
+        approvalStatus: user.approvalStatus,
       },
     });
   } catch (error) {
@@ -415,7 +424,7 @@ export const getPendingUsers = async (req: Request, res: Response, next: NextFun
           { isApproved: { $ne: true }, approvalStatus: { $ne: 'rejected' } },
         ],
       },
-      'email role isBanned firstName lastName phone machzor isApproved approvalStatus createdAt'
+      'email role isBanned firstName lastName phone machzor isApproved approvalStatus reidentificationRequested createdAt'
     ).sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -445,6 +454,8 @@ export const approveUser = async (req: Request, res: Response, next: NextFunctio
 
     user.isApproved = true;
     user.approvalStatus = 'approved';
+    user.isBanned = false;
+    user.reidentificationRequested = false;
     await user.save();
 
     res.status(200).json({
@@ -454,6 +465,7 @@ export const approveUser = async (req: Request, res: Response, next: NextFunctio
         _id: user._id,
         email: user.email,
         role: user.role,
+        isBanned: user.isBanned,
         isApproved: user.isApproved,
         approvalStatus: user.approvalStatus,
       },
@@ -489,17 +501,88 @@ export const rejectUser = async (req: Request, res: Response, next: NextFunction
 
     user.isApproved = false;
     user.approvalStatus = 'rejected';
+    user.isBanned = true;
     await user.save();
 
     res.status(200).json({
       success: true,
-      message: `בקשת הגישה של ${user.email} נדחתה`,
+      message: `בקשת הגישה של ${user.email} נדחתה והמשתמש נחסם`,
       data: {
         _id: user._id,
         email: user.email,
         role: user.role,
+        isBanned: user.isBanned,
         isApproved: user.isApproved,
         approvalStatus: user.approvalStatus,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * בקשת זיהוי פרטים מחדש של משתמש:
+ * מאפס את הפרטים שהוזנו (שם פרטי, שם משפחה, טלפון, מחזור),
+ * ומחזיר את המשתמש לסטטוס ממתין (pending) בדיוק כמו לפני שהזין פרטים.
+ */
+export const requestUserDetails = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id);
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: 'המשתמש לא נמצא במערכת',
+      });
+      return;
+    }
+
+    // מניעת איפוס פרטי מנהל מערכת
+    if (user.role === 'admin') {
+      res.status(403).json({
+        success: false,
+        message: 'אין אפשרות לאפס פרטים של מנהל מערכת',
+      });
+      return;
+    }
+
+    user.firstName = undefined;
+    user.lastName = undefined;
+    user.phone = undefined;
+    user.machzor = undefined;
+    user.isApproved = false;
+    user.approvalStatus = 'pending';
+    user.isBanned = false;
+    user.reidentificationRequested = true;
+    await user.save();
+
+    await User.findByIdAndUpdate(id, {
+      $unset: {
+        firstName: 1,
+        lastName: 1,
+        phone: 1,
+        machzor: 1,
+      },
+      $set: {
+        isApproved: false,
+        approvalStatus: 'pending',
+        isBanned: false,
+        reidentificationRequested: true,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `נשלחה בקשה לזיהוי פרטים מחדש עבור ${user.email}, הפרטים אופסו והמשתמש הוחזר לסטטוס ממתין`,
+      data: {
+        _id: user._id,
+        email: user.email,
+        role: user.role,
+        isBanned: false,
+        isApproved: false,
+        approvalStatus: 'pending',
+        reidentificationRequested: true,
       },
     });
   } catch (error) {

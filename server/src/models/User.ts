@@ -12,6 +12,7 @@ export interface IUser extends Document {
   machzor?: string;
   approvalStatus: 'pending' | 'approved' | 'rejected';
   isApproved: boolean;
+  reidentificationRequested?: boolean;
   refreshTokens?: string[];
   createdAt: Date;
   updatedAt: Date;
@@ -65,6 +66,10 @@ const UserSchema: Schema = new Schema(
       default: 'pending',
     },
     isApproved: {
+      type: Boolean,
+      default: false,
+    },
+    reidentificationRequested: {
       type: Boolean,
       default: false,
     },

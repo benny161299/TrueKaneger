@@ -25,6 +25,7 @@ import {
   getPendingUsers,
   approveUser,
   rejectUser,
+  requestUserDetails,
   getAdminCounts,
 } from '../controllers/admin.controller.js';
 import { deleteContact } from '../controllers/contact.controller.js';
@@ -51,6 +52,9 @@ router.patch('/users/:id/approve', requireAuth, requireAdmin, validateRequest({ 
 
 // נתיב לדחיית משתמש (מנהל בלבד, מוגן JWT)
 router.patch('/users/:id/reject', requireAuth, requireAdmin, validateRequest({ params: mongoIdParamSchema }), rejectUser);
+
+// נתיב לבקשת זיהוי פרטים מחדש ואיפוס פרטי משתמש (מנהל בלבד, מוגן JWT)
+router.patch('/users/:id/request-details', requireAuth, requireAdmin, validateRequest({ params: mongoIdParamSchema }), requestUserDetails);
 
 // נתיב לחסימה/ביטול חסימה של משתמש (מנהל בלבד, מוגן JWT, ולידציית מזהה וגוף ב-Zod)
 router.patch('/users/:id/ban', requireAuth, requireAdmin, validateRequest({ params: mongoIdParamSchema, body: banUserSchema }), toggleUserBan);
