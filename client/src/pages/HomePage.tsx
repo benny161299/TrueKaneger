@@ -100,6 +100,7 @@ export function HomePage() {
   // Reveal drawer state
   const [selectedContact, setSelectedContact] = useState<ContactData | null>(null);
   const [reportContactTarget, setReportContactTarget] = useState<ContactData | null>(null);
+  const [reportRevealedTarget, setReportRevealedTarget] = useState<RevealedContactData | null>(null);
   const [revealedInfo, setRevealedInfo] = useState<
     Record<string, RevealedContactData>
   >({});
@@ -137,15 +138,32 @@ export function HomePage() {
   const filteredContacts = useMemo(() => {
     let list = [...contacts];
 
-    // 1. חיפוש חופשי (בדיקה על שם משפחה, שם פרטי או שם מלא)
+    // 1. חיפוש חופשי — תמיכה בשם פרטי, שם משפחה, היפוך שמות ("זקס שלמה") וחיפוש רב-מילים
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
+      const words = q.split(/\s+/).filter(Boolean);
+
       list = list.filter((c) => {
         const first = (c.firstName || "").toLowerCase();
         const last = (c.lastName || "").toLowerCase();
-        const full = (c.name || "").toLowerCase();
+        const full = (c.name || `${first} ${last}`).toLowerCase();
+        const reverseFull = `${last} ${first}`.trim().toLowerCase();
         const machzor = (c.machzor || "").toLowerCase();
-        return first.includes(q) || last.includes(q) || full.includes(q) || machzor.includes(q);
+
+        // התאמה ישירה כמחרוזת מלאה רציפה (למשל "שלמה זקס" או "זקס שלמה")
+        if (full.includes(q) || reverseFull.includes(q) || machzor.includes(q)) {
+          return true;
+        }
+
+        // התאמה מרובת מילים: כל מילה בחיפוש חייבת להופיע לפחות באחד השדות
+        return words.every(
+          (w) =>
+            first.includes(w) ||
+            last.includes(w) ||
+            full.includes(w) ||
+            reverseFull.includes(w) ||
+            machzor.includes(w)
+        );
       });
     }
 
@@ -250,8 +268,12 @@ export function HomePage() {
       />
       <ReportContactDialog
         open={Boolean(reportContactTarget)}
-        onClose={() => setReportContactTarget(null)}
+        onClose={() => {
+          setReportContactTarget(null);
+          setReportRevealedTarget(null);
+        }}
         contact={reportContactTarget}
+        revealedData={reportRevealedTarget}
         onSuccess={() => {
           setSuccessMsg("הדיווח התקבל בהצלחה, תודה!");
         }}
@@ -268,7 +290,10 @@ export function HomePage() {
         isRevealing={selectedContact ? revealingId === selectedContact._id : false}
         revealError={revealError}
         onRetry={selectedContact ? () => handleReveal(selectedContact._id) : undefined}
-        onOpenReport={(c) => setReportContactTarget(c)}
+        onOpenReport={(c, rData) => {
+          setReportContactTarget(c);
+          setReportRevealedTarget(rData || (selectedContact ? revealedInfo[selectedContact._id] : null));
+        }}
       />
 
       {error && <StyledAlert severity="error">{error}</StyledAlert>}

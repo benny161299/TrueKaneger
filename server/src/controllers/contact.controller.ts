@@ -12,30 +12,54 @@ export const getContacts = async (req: Request, res: Response, next: NextFunctio
     const { search, letter } = req.query as { search?: string; letter?: string };
     const query: Record<string, any> = {};
 
+    const andConditions: any[] = [];
+
     if (search && typeof search === 'string' && search.trim()) {
-      const safeSearch = escapeRegex(search.trim());
-      query.$or = [
-        { lastName: { $regex: safeSearch, $options: 'i' } },
-        { firstName: { $regex: safeSearch, $options: 'i' } },
-        { name: { $regex: safeSearch, $options: 'i' } },
-        { machzor: { $regex: safeSearch, $options: 'i' } },
-      ];
+      const words = search.trim().split(/\s+/).filter(Boolean);
+      if (words.length === 1) {
+        const safeSearch = escapeRegex(words[0]);
+        andConditions.push({
+          $or: [
+            { lastName: { $regex: safeSearch, $options: 'i' } },
+            { firstName: { $regex: safeSearch, $options: 'i' } },
+            { name: { $regex: safeSearch, $options: 'i' } },
+            { machzor: { $regex: safeSearch, $options: 'i' } },
+          ],
+        });
+      } else if (words.length > 1) {
+        // בחיפוש מרובה מילים (למשל "זקס שלמה" או "שלמה זקס"), כל מילה צריכה להתאים לפחות לאחד השדות
+        for (const word of words) {
+          const safeWord = escapeRegex(word);
+          andConditions.push({
+            $or: [
+              { lastName: { $regex: safeWord, $options: 'i' } },
+              { firstName: { $regex: safeWord, $options: 'i' } },
+              { name: { $regex: safeWord, $options: 'i' } },
+              { machzor: { $regex: safeWord, $options: 'i' } },
+            ],
+          });
+        }
+      }
     }
 
     if (letter && typeof letter === 'string' && letter.trim() && letter.trim() !== 'הכל') {
       const safeLetter = escapeRegex(letter.trim());
-      const letterCondition = {
+      andConditions.push({
         $or: [
           { lastName: { $regex: `^${safeLetter}`, $options: 'i' } },
           { name: { $regex: `^${safeLetter}`, $options: 'i' } },
         ],
-      };
-      if (query.$or) {
-        query.$and = [{ $or: query.$or }, letterCondition];
-        delete query.$or;
+      });
+    }
+
+    if (andConditions.length === 1) {
+      if (andConditions[0].$or) {
+        query.$or = andConditions[0].$or;
       } else {
-        query.$or = letterCondition.$or;
+        query.$and = andConditions;
       }
+    } else if (andConditions.length > 1) {
+      query.$and = andConditions;
     }
 
     // שליפת רשימת אנשי קשר ממוינת בסדר עולה לפי שם משפחה ואז שם פרטי
@@ -238,7 +262,7 @@ export const revealContact = async (req: AuthenticatedRequest, res: Response, ne
       return;
     }
 
-    const contact = await Contact.findById(id).populate('createdBy', 'email');
+    const contact = await Contact.findById(id).populate('createdBy', 'email firstName lastName phone');
     if (!contact) {
       res.status(404).json({
         success: false,
@@ -259,21 +283,36 @@ export const revealContact = async (req: AuthenticatedRequest, res: Response, ne
       : false;
 
     // מטא-דאטה מנהל: נחשף אך ורק למנהלים (admin)
+    const creator = contact.createdBy as any;
+    const creatorName = creator && (creator.firstName || creator.lastName)
+      ? `${creator.firstName || ''} ${creator.lastName || ''}`.trim()
+      : undefined;
+
     const adminMeta = req.user.role === 'admin'
       ? {
-          createdByEmail: (contact.createdBy as any)?.email || 'לא צוין',
-          createdById: (contact.createdBy as any)?._id || contact.createdBy,
+          createdByEmail: creator?.email || 'לא צוין',
+          createdByName: creatorName,
+          createdByPhone: creator?.phone || undefined,
+          createdById: creator?._id || contact.createdBy,
           createdAt: (contact as any).createdAt,
         }
       : undefined;
+
+    // תיקון אוטומטי בזמן חשיפה במקרה של אי-התאמה היסטורית בין phone שעודכן ל-nonKosherPhone הישן
+    let effectiveNonKosher = contact.nonKosherPhone;
+    if (contact.phone && contact.phone !== contact.kosherPhone && contact.phone !== contact.nonKosherPhone) {
+      effectiveNonKosher = contact.phone;
+      contact.nonKosherPhone = contact.phone;
+      contact.save().catch(() => {});
+    }
 
     res.status(200).json({
       success: true,
       message: 'פרטי איש הקשר נחשפו בהצלחה',
       data: {
-        phone: contact.phone || contact.kosherPhone || contact.nonKosherPhone,
+        phone: contact.phone || contact.kosherPhone || effectiveNonKosher,
         kosherPhone: contact.kosherPhone || null,
-        nonKosherPhone: contact.nonKosherPhone || null,
+        nonKosherPhone: effectiveNonKosher || null,
         machzor: contact.machzor || null,
         email: contact.email || null,
         hasReported: !!hasReported,

@@ -37,6 +37,8 @@ interface ContactsContextType {
     hasReported?: boolean;
     adminMeta?: {
       createdByEmail: string;
+      createdByName?: string;
+      createdByPhone?: string;
       createdById: string;
       createdAt?: string;
     };

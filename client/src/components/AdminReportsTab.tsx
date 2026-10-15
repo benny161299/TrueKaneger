@@ -35,11 +35,16 @@ import {
   type AdminReportItem,
 } from "../services/adminService";
 
-const REASON_LABELS: Record<string, { label: string; color: "error" | "warning" | "info" | "default" }> = {
+const REASON_LABELS: Record<string, { label: string; color: "error" | "warning" | "info" | "default" | "success" }> = {
   WRONG_NUMBER: { label: "מספר לא נכון", color: "error" },
+  WRONG_NON_KOSHER_PHONE: { label: "מספר לא כשר שגוי", color: "error" },
+  WRONG_KOSHER_PHONE: { label: "מספר כשר שגוי", color: "error" },
+  ADD_NON_KOSHER_PHONE: { label: "הוספת מספר לא כשר", color: "info" },
+  ADD_KOSHER_PHONE: { label: "הוספת מספר כשר", color: "success" },
   DOES_NOT_EXIST: { label: "איש קשר לא קיים", color: "error" },
   WRONG_NAME: { label: "שם לא נכון", color: "warning" },
   WRONG_EMAIL: { label: "מייל לא נכון", color: "info" },
+  ADD_EMAIL: { label: "הוספת מייל", color: "info" },
   OTHER: { label: "אחר", color: "default" },
 };
 
@@ -63,8 +68,8 @@ export function AdminReportsTab() {
     reporterEmail?: string;
     firstName: string;
     lastName: string;
-    phone: string;
     kosherPhone: string;
+    nonKosherPhone: string;
     machzor: string;
     email: string;
   } | null>(null);
@@ -116,21 +121,39 @@ export function AdminReportsTab() {
       lastName = parts.slice(1).join(" ") || "";
     }
 
-    let phone = contact.phone || "";
     let kosherPhone = contact.kosherPhone || "";
+    let nonKosherPhone = contact.nonKosherPhone || "";
+
+    // אם שניהם ריקים אך קיים מספר phone ישן, נשתמש בו כמספר לא כשר
+    if (!kosherPhone && !nonKosherPhone && contact.phone) {
+      nonKosherPhone = contact.phone;
+    }
+    // אם phone עודכן בעבר באישור דיווח קודם ואינו תואם
+    if (contact.phone && contact.phone !== contact.kosherPhone && contact.phone !== contact.nonKosherPhone) {
+      nonKosherPhone = contact.phone;
+    }
+
     let machzor = contact.machzor || "";
     let email = contact.email || "";
 
     // שיבוץ אוטומטי של ההצעה לשדה המתאים
     if (report.suggestedCorrection) {
       const sc = report.suggestedCorrection.trim();
-      if (report.reason === "WRONG_NUMBER") {
-        phone = sc;
+      if (report.reason === "WRONG_NON_KOSHER_PHONE" || report.reason === "ADD_NON_KOSHER_PHONE") {
+        nonKosherPhone = sc;
+      } else if (report.reason === "WRONG_KOSHER_PHONE" || report.reason === "ADD_KOSHER_PHONE") {
+        kosherPhone = sc;
+      } else if (report.reason === "WRONG_NUMBER") {
+        if (kosherPhone && !nonKosherPhone) {
+          kosherPhone = sc;
+        } else {
+          nonKosherPhone = sc;
+        }
       } else if (report.reason === "WRONG_NAME") {
         const parts = sc.split(" ");
         firstName = parts[0] || "";
         lastName = parts.slice(1).join(" ") || "";
-      } else if (report.reason === "WRONG_EMAIL") {
+      } else if (report.reason === "WRONG_EMAIL" || report.reason === "ADD_EMAIL") {
         email = sc;
       }
     }
@@ -145,8 +168,8 @@ export function AdminReportsTab() {
       reporterEmail: report.reportedBy?.email,
       firstName,
       lastName,
-      phone,
       kosherPhone,
+      nonKosherPhone,
       machzor,
       email,
     });
@@ -161,10 +184,10 @@ export function AdminReportsTab() {
       return;
     }
 
-    const cleanPhone = fullEditTarget.phone.trim();
+    const cleanNonKosher = fullEditTarget.nonKosherPhone.trim();
     const cleanKosher = fullEditTarget.kosherPhone.trim();
-    if (!cleanPhone && !cleanKosher) {
-      setEditFormError("יש להזין לפחות מספר טלפון אחד (רגיל או כשר)");
+    if (!cleanNonKosher && !cleanKosher) {
+      setEditFormError("יש להזין לפחות מספר טלפון אחד (לא כשר או כשר)");
       return;
     }
 
@@ -174,8 +197,9 @@ export function AdminReportsTab() {
         firstName: fullEditTarget.firstName.trim(),
         lastName: fullEditTarget.lastName.trim(),
         name: `${fullEditTarget.firstName.trim()} ${fullEditTarget.lastName.trim()}`.trim(),
-        phone: cleanPhone,
-        kosherPhone: cleanKosher,
+        nonKosherPhone: cleanNonKosher || undefined,
+        kosherPhone: cleanKosher || undefined,
+        phone: cleanNonKosher || cleanKosher,
         machzor: fullEditTarget.machzor.trim(),
         email: fullEditTarget.email.trim(),
         dismissReportId: dismissReport ? fullEditTarget.reportId : undefined,
@@ -368,15 +392,48 @@ export function AdminReportsTab() {
                         <Box
                           style={{
                             display: "flex",
-                            gap: "14px",
-                            flexWrap: "wrap",
+                            flexDirection: "column",
+                            gap: "8px",
                             fontSize: "13px",
                             color: "#546e7a",
                           }}
                         >
-                          <Box style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                            <PhoneIcon style={{ fontSize: "14px" }} />
-                            <span dir="ltr">{contact.phone}</span>
+                          <Box style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                            {contact.kosherPhone && (
+                              <Box style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                <PhoneIcon style={{ fontSize: "14px", color: "#2d6a4f" }} />
+                                <span dir="ltr" style={{ fontWeight: 600, color: "#1b4332" }}>{contact.kosherPhone}</span>
+                                <Chip label="כשר" size="small" style={{ height: "18px", fontSize: "11px", backgroundColor: "#d8f3dc", color: "#1b4332", fontWeight: 600 }} />
+                              </Box>
+                            )}
+
+                            {contact.nonKosherPhone && (
+                              <Box style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                <PhoneIcon style={{ fontSize: "14px", color: "#152d3b" }} />
+                                <span dir="ltr" style={{ fontWeight: 600, color: "#152d3b" }}>{contact.nonKosherPhone}</span>
+                                <Chip label="לא כשר" size="small" style={{ height: "18px", fontSize: "11px", backgroundColor: "#e2ecf4", color: "#152d3b", fontWeight: 600 }} />
+                              </Box>
+                            )}
+
+                            {!contact.kosherPhone && !contact.nonKosherPhone && contact.phone && (
+                              <Box style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                <PhoneIcon style={{ fontSize: "14px" }} />
+                                <span dir="ltr">{contact.phone}</span>
+                              </Box>
+                            )}
+
+                            {contact.phone && contact.phone !== contact.kosherPhone && contact.phone !== contact.nonKosherPhone && (
+                              <Box style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                <Chip
+                                  label={`טלפון במאגר: ${contact.phone}`}
+                                  size="small"
+                                  color="warning"
+                                  variant="outlined"
+                                  style={{ height: "18px", fontSize: "11px", fontWeight: 600 }}
+                                />
+                              </Box>
+                            )}
+
                             <Tooltip title="ערוך פרטי איש קשר">
                               <IconButton
                                 size="small"
@@ -392,15 +449,6 @@ export function AdminReportsTab() {
                             <Box style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                               <EmailIcon style={{ fontSize: "14px" }} />
                               <span dir="ltr">{contact.email}</span>
-                              <Tooltip title="ערוך פרטי איש קשר">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleOpenFullEdit(report)}
-                                  style={{ padding: "2px", marginRight: "2px" }}
-                                >
-                                  <EditIcon style={{ fontSize: "14px", color: "#1976d2" }} />
-                                </IconButton>
-                              </Tooltip>
                             </Box>
                           )}
                         </Box>
@@ -605,11 +653,43 @@ export function AdminReportsTab() {
               {fullEditTarget.suggestedCorrection && (
                 <Box style={{ marginBottom: "6px" }}>
                   <Typography variant="caption" style={{ color: "#166534", fontWeight: 700, display: "block" }}>
-                    תיקון שהוצע ע״י המדווח (שובץ בטופס):
+                    תיקון שהוצע ע״י המדווח:
                   </Typography>
                   <Typography variant="body2" style={{ color: "#15803d", fontWeight: 600 }}>
                     {fullEditTarget.suggestedCorrection}
                   </Typography>
+                  {(fullEditTarget.reportReason === "WRONG_NUMBER" ||
+                    fullEditTarget.reportReason === "WRONG_NON_KOSHER_PHONE" ||
+                    fullEditTarget.reportReason === "WRONG_KOSHER_PHONE" ||
+                    fullEditTarget.reportReason === "ADD_NON_KOSHER_PHONE" ||
+                    fullEditTarget.reportReason === "ADD_KOSHER_PHONE") && (
+                    <Box style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() =>
+                          setFullEditTarget((prev) =>
+                            prev ? { ...prev, nonKosherPhone: fullEditTarget.suggestedCorrection!.trim() } : null
+                          )
+                        }
+                        style={{ fontSize: "12px", padding: "2px 8px" }}
+                      >
+                        שבץ כטלפון לא כשר
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() =>
+                          setFullEditTarget((prev) =>
+                            prev ? { ...prev, kosherPhone: fullEditTarget.suggestedCorrection!.trim() } : null
+                          )
+                        }
+                        style={{ fontSize: "12px", padding: "2px 8px" }}
+                      >
+                        שבץ כטלפון כשר
+                      </Button>
+                    </Box>
+                  )}
                 </Box>
               )}
 
@@ -657,14 +737,14 @@ export function AdminReportsTab() {
                 />
               </Box>
 
-              {/* שורה 2: טלפון רגיל וטלפון כשר */}
+              {/* שורה 2: טלפון לא כשר וטלפון כשר */}
               <Box style={{ display: "flex", gap: "12px" }}>
                 <TextField
-                  label="טלפון רגיל"
+                  label="טלפון לא כשר"
                   placeholder="050-1234567"
-                  value={fullEditTarget.phone}
+                  value={fullEditTarget.nonKosherPhone}
                   onChange={(e) =>
-                    setFullEditTarget((prev) => (prev ? { ...prev, phone: e.target.value } : null))
+                    setFullEditTarget((prev) => (prev ? { ...prev, nonKosherPhone: e.target.value } : null))
                   }
                   fullWidth
                   size="small"

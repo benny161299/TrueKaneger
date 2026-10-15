@@ -22,6 +22,10 @@ await connectDB();
 import { migrateUserApprovals } from './utils/migrateUsers.js';
 await migrateUserApprovals();
 
+// 📞 מיגרציה בטוחה: סנכרון מספרי טלפון ישנים שאושרו בדיווחים
+import { migrateMismatchedPhones } from './utils/migratePhones.js';
+await migrateMismatchedPhones();
+
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1); // חובה עבור Render ופלטפורמות ענן לקבלת פרוטוקול HTTPS אמין ועוגיות מאובטחות

@@ -290,14 +290,36 @@ export function AdminPendingTab() {
                 )}
 
                 {/* Submitted by */}
-                {item.createdBy && (
-                  <Box style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
-                    <PersonIcon style={{ color: "#9fb3c8", fontSize: "16px" }} />
-                    <Typography variant="caption" style={{ color: "#829ab1" }}>
-                      נשלח ע״י: {item.createdBy.email}
-                    </Typography>
-                  </Box>
-                )}
+                {item.createdBy && (() => {
+                  const creatorName = [item.createdBy.firstName, item.createdBy.lastName]
+                    .filter(Boolean)
+                    .join(" ")
+                    .trim();
+                  return (
+                    <Box style={{ marginTop: "8px" }}>
+                      <Box style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <PersonIcon style={{ color: "#9fb3c8", fontSize: "16px" }} />
+                        <Typography variant="caption" style={{ color: "#486581", fontWeight: 600 }}>
+                          נשלח ע״י:{" "}
+                          {creatorName
+                            ? `${creatorName} (${item.createdBy.email})`
+                            : item.createdBy.email}
+                        </Typography>
+                      </Box>
+                      {item.createdBy.phone && (
+                        <Box style={{ display: "flex", alignItems: "center", gap: "6px", marginRight: "22px", marginTop: "2px" }}>
+                          <PhoneIcon style={{ color: "#9fb3c8", fontSize: "14px" }} />
+                          <Typography variant="caption" style={{ color: "#486581" }}>
+                            טלפון:{" "}
+                            <strong style={{ direction: "ltr", display: "inline-block" }}>
+                              {item.createdBy.phone}
+                            </strong>
+                          </Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  );
+                })()}
 
                 {/* Submitted at */}
                 <Typography

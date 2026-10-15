@@ -70,9 +70,14 @@ export function ReportBreakdownContent({
 }) {
   const translations: Record<string, string> = {
     WRONG_NUMBER: "מספר לא נכון",
+    WRONG_NON_KOSHER_PHONE: "מספר לא כשר שגוי",
+    WRONG_KOSHER_PHONE: "מספר כשר שגוי",
+    ADD_NON_KOSHER_PHONE: "הוספת מספר לא כשר",
+    ADD_KOSHER_PHONE: "הוספת מספר כשר",
     DOES_NOT_EXIST: "איש קשר לא קיים",
     WRONG_NAME: "שם לא נכון",
     WRONG_EMAIL: "מייל לא נכון",
+    ADD_EMAIL: "הוספת מייל",
     OTHER: "אחר",
   };
 

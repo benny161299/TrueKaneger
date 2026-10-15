@@ -72,13 +72,30 @@ export function AdminPendingUsersTab() {
   const filteredPendingUsers = useMemo(() => {
     if (!searchQuery.trim()) return pendingUsers;
     const q = searchQuery.trim().toLowerCase();
+    const words = q.split(/\s+/).filter(Boolean);
+
     return pendingUsers.filter((u) => {
-      const name = `${u.firstName || ""} ${u.lastName || ""}`.toLowerCase();
-      return (
-        u.email.toLowerCase().includes(q) ||
-        name.includes(q) ||
-        (u.phone && u.phone.includes(q)) ||
-        (u.machzor && u.machzor.toLowerCase().includes(q))
+      const first = (u.firstName || "").toLowerCase();
+      const last = (u.lastName || "").toLowerCase();
+      const full = `${first} ${last}`.trim().toLowerCase();
+      const reverseFull = `${last} ${first}`.trim().toLowerCase();
+      const email = (u.email || "").toLowerCase();
+      const phone = (u.phone || "");
+      const machzor = (u.machzor || "").toLowerCase();
+
+      if (full.includes(q) || reverseFull.includes(q) || email.includes(q) || phone.includes(q) || machzor.includes(q)) {
+        return true;
+      }
+
+      return words.every(
+        (w) =>
+          first.includes(w) ||
+          last.includes(w) ||
+          full.includes(w) ||
+          reverseFull.includes(w) ||
+          email.includes(w) ||
+          phone.includes(w) ||
+          machzor.includes(w)
       );
     });
   }, [pendingUsers, searchQuery]);

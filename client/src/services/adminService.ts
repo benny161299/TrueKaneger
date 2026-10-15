@@ -15,6 +15,9 @@ export interface AdminReportItem {
     createdBy?: {
       _id: string;
       email: string;
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
     } | null;
     createdAt?: string;
   } | null;
@@ -73,6 +76,9 @@ export interface PendingContactItem {
   createdBy?: {
     _id: string;
     email: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
   } | null;
   createdAt: string;
   updatedAt: string;
@@ -108,8 +114,12 @@ export const adminService = {
     await api.patch(`/admin/contacts/${contactId}/name`, { name });
   },
 
-  async updateContactPhone(contactId: string, phone: string): Promise<void> {
-    await api.patch(`/admin/contacts/${contactId}/phone`, { phone });
+  async updateContactPhone(
+    contactId: string,
+    phoneData: { phone?: string; kosherPhone?: string; nonKosherPhone?: string } | string
+  ): Promise<void> {
+    const payload = typeof phoneData === "string" ? { phone: phoneData } : phoneData;
+    await api.patch(`/admin/contacts/${contactId}/phone`, payload);
   },
 
   async updateContactEmail(contactId: string, email: string): Promise<void> {
@@ -124,6 +134,7 @@ export const adminService = {
       name?: string;
       phone?: string;
       kosherPhone?: string;
+      nonKosherPhone?: string;
       machzor?: string;
       email?: string;
       dismissReportId?: string;

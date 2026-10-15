@@ -171,6 +171,8 @@ export interface RevealedContactData {
   hasReported?: boolean;
   adminMeta?: {
     createdByEmail: string;
+    createdByName?: string;
+    createdByPhone?: string;
     createdById: string;
     createdAt?: string;
   };
@@ -183,7 +185,7 @@ interface DrawerBodyProps {
   revealError?: string;
   onClose: () => void;
   onRetry?: () => void;
-  onOpenReport?: (contact: ContactData) => void;
+  onOpenReport?: (contact: ContactData, revealedData?: RevealedContactData) => void;
 }
 
 function DrawerBody({
@@ -870,7 +872,7 @@ function DrawerBody({
               title={
                 Boolean(contact.hasReported || revealedData?.hasReported)
                   ? "כבר דיווחת על איש קשר זה"
-                  : "דיווח על מספר או פרטים לא תקינים"
+                  : "דיווח על בעיה או הוספת פרטים"
               }
             >
               <span>
@@ -890,7 +892,7 @@ function DrawerBody({
                       <ReportProblemOutlinedIcon fontSize="small" />
                     )
                   }
-                  onClick={() => onOpenReport?.(contact)}
+                  onClick={() => onOpenReport?.(contact, revealedData)}
                   size="small"
                   style={{
                     fontSize: "13px",
@@ -902,7 +904,7 @@ function DrawerBody({
                 >
                   {Boolean(contact.hasReported || revealedData?.hasReported)
                     ? "דווחת על איש קשר זה"
-                    : "דווח על בעיה"}
+                    : "דווח על בעיה / הוסף פרטים"}
                 </Button>
               </span>
             </Tooltip>
@@ -931,18 +933,52 @@ function DrawerBody({
                 display: "flex",
                 alignItems: "center",
                 gap: "4px",
+                borderBottom: "1px dashed #cbd5e1",
+                paddingBottom: "6px",
+                marginBottom: "2px",
               }}
             >
               🛡️ מידע למנהל מערכת
             </Typography>
-            <Typography variant="body2" style={{ fontSize: "13px", color: "#334e68" }}>
-              איש הקשר נוסף ע״י: <strong>{revealedData.adminMeta.createdByEmail}</strong>
-            </Typography>
-            {revealedData.adminMeta.createdAt && (
-              <Typography variant="caption" style={{ color: "#627d98" }}>
-                תאריך יצירה: {new Date(revealedData.adminMeta.createdAt).toLocaleString("he-IL")}
+
+            <Box style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <Typography variant="body2" style={{ fontSize: "13px", color: "#1e293b" }}>
+                נוסף ע״י:{" "}
+                <strong>
+                  {revealedData.adminMeta.createdByName || revealedData.adminMeta.createdByEmail}
+                </strong>
               </Typography>
-            )}
+
+              {revealedData.adminMeta.createdByName && (
+                <Typography
+                  variant="caption"
+                  style={{ color: "#475569", display: "flex", alignItems: "center", gap: "6px" }}
+                >
+                  <span>מייל:</span>
+                  <span style={{ direction: "ltr", fontWeight: 600, color: "#1e293b" }}>
+                    {revealedData.adminMeta.createdByEmail}
+                  </span>
+                </Typography>
+              )}
+
+              {revealedData.adminMeta.createdByPhone && (
+                <Typography
+                  variant="caption"
+                  style={{ color: "#475569", display: "flex", alignItems: "center", gap: "6px" }}
+                >
+                  <span>טלפון:</span>
+                  <strong style={{ direction: "ltr", display: "inline-block", color: "#1e293b" }}>
+                    {revealedData.adminMeta.createdByPhone}
+                  </strong>
+                </Typography>
+              )}
+
+              {revealedData.adminMeta.createdAt && (
+                <Typography variant="caption" style={{ color: "#64748b", marginTop: "2px" }}>
+                  תאריך יצירה: {new Date(revealedData.adminMeta.createdAt).toLocaleString("he-IL")}
+                </Typography>
+              )}
+            </Box>
           </Box>
         )}
       </Box>
@@ -980,7 +1016,7 @@ export interface ContactRevealDrawerProps {
   isRevealing: boolean;
   revealError?: string;
   onRetry?: () => void;
-  onOpenReport?: (contact: ContactData) => void;
+  onOpenReport?: (contact: ContactData, revealedData?: RevealedContactData) => void;
 }
 
 export function ContactRevealDrawer({

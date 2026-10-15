@@ -20,7 +20,7 @@ export const getReports = async (req: Request, res: Response, next: NextFunction
         select: 'firstName lastName name phone kosherPhone nonKosherPhone machzor email createdBy createdAt',
         populate: {
           path: 'createdBy',
-          select: 'email',
+          select: 'email firstName lastName phone',
         },
       })
       .populate('reportedBy', 'email');
@@ -203,11 +203,12 @@ export const updateContactPhone = async (req: Request, res: Response, next: Next
       return;
     }
 
-    if (phone !== undefined) contact.phone = phone || undefined;
-    if (kosherPhone !== undefined) contact.kosherPhone = kosherPhone || undefined;
-    if (nonKosherPhone !== undefined) contact.nonKosherPhone = nonKosherPhone || undefined;
-    if (!contact.phone) {
-      contact.phone = contact.kosherPhone || contact.nonKosherPhone;
+    if (kosherPhone !== undefined) contact.kosherPhone = kosherPhone ? kosherPhone.trim() : undefined;
+    if (nonKosherPhone !== undefined) contact.nonKosherPhone = nonKosherPhone ? nonKosherPhone.trim() : undefined;
+    if (phone !== undefined && phone) {
+      contact.phone = phone.trim();
+    } else {
+      contact.phone = contact.nonKosherPhone || contact.kosherPhone;
     }
     await contact.save();
 
@@ -290,13 +291,14 @@ export const updateContactFull = async (req: Request, res: Response, next: NextF
       contact.name = `${contact.firstName || ''} ${contact.lastName || ''}`.trim();
     }
 
-    if (phone !== undefined) contact.phone = phone ? phone.trim() : undefined;
     if (kosherPhone !== undefined) contact.kosherPhone = kosherPhone ? kosherPhone.trim() : undefined;
     if (nonKosherPhone !== undefined) contact.nonKosherPhone = nonKosherPhone ? nonKosherPhone.trim() : undefined;
 
-    // ודא שלפחות שדה phone ראשי מוגדר
-    if (!contact.phone) {
-      contact.phone = contact.kosherPhone || contact.nonKosherPhone;
+    // ודא ששדה phone הראשי מסונכרן תמיד עם המספר הפעיל
+    if (phone !== undefined && phone) {
+      contact.phone = phone.trim();
+    } else {
+      contact.phone = contact.nonKosherPhone || contact.kosherPhone;
     }
 
     if (machzor !== undefined) contact.machzor = machzor ? machzor.trim() : undefined;
@@ -333,7 +335,7 @@ export const updateContactFull = async (req: Request, res: Response, next: NextF
 export const getPendingContacts = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const pending = await PendingContact.find()
-      .populate('createdBy', 'email')
+      .populate('createdBy', 'email firstName lastName phone')
       .sort({ createdAt: -1 });
 
     res.status(200).json({
